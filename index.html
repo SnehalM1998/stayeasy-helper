@@ -1,0 +1,1296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StayEasy Helper</title>
+<meta name="description" content="StayEasy Helper: a guest assistant prototype for holiday-let bookings, check-in, changes, refunds, extras and live agent handover." />
+<style>
+  :root {
+    --green: #1A6B3A;
+    --green-dark: #144F2B;
+    --green-light: #E7F1EC;
+    --green-bubble: #D8EFDF;
+    --chat-bg: #EAF1EC;
+    --page-bg: #F4F6F7;
+    --card: #FFFFFF;
+    --ink: #1D2A22;
+    --muted: #5E6B63;
+    --line: #D6DFD9;
+    --navy: #1A3A6B;
+    --amber: #B45309;
+    --amber-bg: #FFF4DE;
+    --amber-line: #F2C46B;
+    --red: #B42318;
+    --agent: #1A3A6B;
+    --agent-light: #E8ECF3;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(16, 40, 24, .08), 0 4px 14px rgba(16, 40, 24, .06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--page-bg);
+    color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  button { font: inherit; cursor: pointer; }
+  button:disabled { cursor: default; }
+  :focus-visible { outline: 3px solid #7FB896; outline-offset: 2px; }
+
+  /* ---------- Page frame ---------- */
+  .topbar {
+    max-width: 1180px; margin: 0 auto; padding: 22px 16px 10px;
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px;
+  }
+  .topbar h1 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+  .topbar h1 span { color: var(--green); }
+  .topbar p { margin: 0; color: var(--muted); font-size: 14px; }
+  .layout {
+    max-width: 1180px; margin: 0 auto; padding: 8px 16px 24px;
+    display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 24px; align-items: start;
+  }
+  @media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- Phone / chat ---------- */
+  .phone {
+    position: relative; height: min(820px, calc(100vh - 110px)); min-height: 560px;
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--chat-bg); border-radius: 22px; box-shadow: 0 10px 40px rgba(16, 40, 24, .16);
+    border: 1px solid #C9D6CE;
+  }
+  @media (max-width: 860px) { .phone { height: 78vh; } }
+  .chat-head {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: var(--green); color: #fff; flex: none;
+  }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%; flex: none;
+    display: grid; place-items: center; font-weight: 700; font-size: 14px;
+    background: #fff; color: var(--green);
+  }
+  .chat-head .who { flex: 1; min-width: 0; }
+  .chat-head .who b { display: block; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-head .who small { opacity: .85; font-size: 12px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-head .who small::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #7CE0A0; margin-right: 5px; vertical-align: 1px; }
+  .chat-head.with-agent { background: var(--agent); }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #fff; background: none; border: 0; padding: 4px; }
+  .toggle .track { width: 34px; height: 20px; border-radius: 10px; background: rgba(255,255,255,.35); position: relative; transition: background .2s; }
+  .toggle .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  .toggle[aria-pressed="true"] .track { background: #7CE0A0; }
+  .toggle[aria-pressed="true"] .track::after { transform: translateX(14px); }
+  .icon-btn { background: rgba(255,255,255,.15); border: 0; color: #fff; border-radius: 8px; width: 32px; height: 32px; font-size: 16px; }
+
+  .chat { flex: 1; overflow-y: auto; padding: 14px 10px 8px; scroll-behavior: smooth; }
+  .day-pill, .sys-pill {
+    display: table; margin: 4px auto 12px; padding: 3px 10px; border-radius: 8px;
+    background: #DCE7E0; color: #3F5247; font-size: 12px;
+  }
+  .sys-pill.agent { background: var(--agent-light); color: var(--agent); font-weight: 600; }
+  .row { display: flex; margin: 0 0 8px; }
+  .row.user { justify-content: flex-end; }
+  .bubble {
+    max-width: 86%; padding: 8px 11px; border-radius: 12px; background: var(--card);
+    box-shadow: 0 1px 1px rgba(0,0,0,.06); overflow-wrap: anywhere;
+  }
+  .row.bot .bubble { border-top-left-radius: 4px; }
+  .row.user .bubble { background: var(--green-bubble); border-top-right-radius: 4px; }
+  .row.agent .bubble { border-top-left-radius: 4px; border-left: 3px solid var(--agent); }
+  .bubble .from { display: block; font-size: 12px; font-weight: 700; color: var(--agent); margin-bottom: 2px; }
+  .bubble.wide { max-width: 100%; width: 100%; padding: 0; background: none; box-shadow: none; }
+  .bubble p { margin: 0 0 6px; } .bubble p:last-child { margin: 0; }
+  .meta { display: block; text-align: right; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .typing { display: inline-flex; gap: 4px; padding: 12px 14px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: #9AAFA2; animation: blink 1.1s infinite; }
+  .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+  /* Quick replies */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 12px; padding-left: 2px; }
+  .chip {
+    border: 1.5px solid var(--green); color: var(--green); background: #fff;
+    padding: 6px 12px; border-radius: 18px; font-size: 14px; font-weight: 600;
+  }
+  .chip:hover { background: var(--green-light); }
+  .chip.urgent { border-color: var(--amber); color: var(--amber); }
+  .chip.person { border-color: var(--agent); color: var(--agent); }
+
+  /* Cards */
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .card .hero { height: 86px; display: flex; align-items: flex-end; justify-content: space-between; padding: 8px 10px; color: #fff; font-size: 30px; }
+  .card .hero .tag { font-size: 11px; font-weight: 700; background: rgba(0,0,0,.35); padding: 2px 7px; border-radius: 6px; letter-spacing: .02em; }
+  .card .body { padding: 10px 12px 12px; }
+  .card h3 { margin: 0 0 2px; font-size: 16px; }
+  .card .sub { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
+  .card .facts { list-style: none; margin: 6px 0 8px; padding: 0; font-size: 13.5px; }
+  .card .facts li { padding: 3px 0; border-bottom: 1px dashed var(--line); display: flex; justify-content: space-between; gap: 10px; }
+  .card .facts li:last-child { border-bottom: 0; }
+  .card .facts li span:first-child { color: var(--muted); }
+  .card .actions { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .btn {
+    border: 0; background: var(--green); color: #fff; font-weight: 600; font-size: 14px;
+    padding: 8px 12px; border-radius: 10px; text-align: center;
+  }
+  .btn:hover { background: var(--green-dark); }
+  .btn.ghost { background: var(--green-light); color: var(--green-dark); }
+  .btn.ghost:hover { background: #D5E8DD; }
+  .btn.danger { background: #FCE8E6; color: var(--red); }
+  .btn.added { background: #fff; color: var(--green); border: 1.5px solid var(--green); }
+  .btn:disabled { background: #E3E8E5; color: #8A968F; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; letter-spacing: .02em; }
+  .pill.up { background: var(--green-light); color: var(--green-dark); }
+  .pill.past { background: #EEF0EF; color: var(--muted); }
+  .pill.cancel { background: #FCE8E6; color: var(--red); }
+  .pill.no { background: #FCE8E6; color: var(--red); }
+  .note { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+  .policy { border-left: 4px solid var(--green); }
+  .policy.fee { border-left-color: var(--amber); }
+  .policy .outcome { font-size: 20px; font-weight: 800; margin: 4px 0; }
+  .policy.fee .outcome { color: var(--amber); }
+  .policy:not(.fee) .outcome { color: var(--green); }
+  .wifi { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--green-light); border-radius: 8px; padding: 7px 9px; margin: 6px 0; font-size: 13px; }
+  .wifi b { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: block; font-size: 12px; color: var(--green-dark); }
+  .copy { border: 0; background: none; color: var(--green); font-weight: 700; font-size: 12px; padding: 0 0 0 6px; }
+
+  /* Carousel */
+  .carousel-wrap { position: relative; }
+  .carousel {
+    display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 10px;
+    scrollbar-width: thin;
+  }
+  .carousel > .card { flex: 0 0 78%; scroll-snap-align: start; display: flex; flex-direction: column; }
+  .carousel > .card .body { flex: 1; display: flex; flex-direction: column; }
+  .carousel > .card .actions { margin-top: auto; padding-top: 8px; }
+  .car-nav { position: absolute; top: 34px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(255,255,255,.95); box-shadow: var(--shadow); color: var(--green); font-weight: 800; }
+  .car-nav.prev { left: -4px; } .car-nav.next { right: -4px; }
+  .car-hint { font-size: 12px; color: var(--muted); margin: -4px 0 0 4px; }
+
+  /* Calendar */
+  .cal { padding: 10px 12px 12px; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .cal-head b { font-size: 15px; }
+  .cal-head button { border: 0; background: var(--green-light); color: var(--green-dark); width: 30px; height: 30px; border-radius: 8px; font-weight: 800; }
+  .cal-head button:disabled { opacity: .35; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
+  .cal-grid .dow { font-size: 11px; color: var(--muted); font-weight: 700; padding: 2px 0; }
+  .day { border: 0; background: #fff; border-radius: 8px; height: 34px; font-size: 13.5px; color: var(--ink); padding: 0; }
+  .day:hover:not(:disabled) { background: var(--green-light); }
+  .day.past { color: #B8C2BC; background: transparent; }
+  .day.booked { color: #A6B0AA; text-decoration: line-through; background: repeating-linear-gradient(135deg, #F1F3F2 0 4px, #E6EAE8 4px 8px); }
+  .day.today { box-shadow: inset 0 0 0 2px var(--navy); }
+  .day.range { background: var(--green-light); border-radius: 0; color: var(--green-dark); }
+  .day.start, .day.end { background: var(--green); color: #fff; text-decoration: none; }
+  .day.start { border-radius: 8px 0 0 8px; } .day.end { border-radius: 0 8px 8px 0; }
+  .day.start.end { border-radius: 8px; }
+  .cal-legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); margin: 8px 0 4px; flex-wrap: wrap; }
+  .cal-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+  .cal-sum { font-size: 13.5px; min-height: 20px; margin: 4px 0 8px; }
+  .cal-sum.warn { color: var(--amber); font-weight: 600; }
+  .cal.locked .day, .cal.locked .cal-head button { pointer-events: none; }
+  .cal.locked { opacity: .75; }
+
+  /* Cart */
+  .cartbar {
+    flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 7px 12px; background: var(--green-dark); color: #fff; font-size: 14px;
+  }
+  .cartbar[hidden] { display: none; }
+  .cartbar button { border: 0; background: #fff; color: var(--green-dark); font-weight: 700; padding: 5px 12px; border-radius: 14px; font-size: 13px; }
+  .cart-line { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .cart-line .grow { flex: 1; min-width: 0; }
+  .cart-line small { display: block; color: var(--muted); font-size: 12px; }
+  .cart-line .rm { border: 0; background: #F1F3F2; color: var(--muted); width: 26px; height: 26px; border-radius: 50%; font-weight: 700; }
+  .cart-total { display: flex; justify-content: space-between; font-weight: 800; font-size: 16px; padding: 8px 0 2px; }
+
+  /* Steps */
+  .steps { list-style: none; margin: 8px 0 4px; padding: 0; }
+  .steps li { position: relative; padding: 0 0 14px 30px; font-size: 14px; }
+  .steps li::before {
+    content: ""; position: absolute; left: 0; top: 1px; width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid #C3CEC7; background: #fff; box-sizing: border-box;
+  }
+  .steps li::after { content: ""; position: absolute; left: 8px; top: 21px; bottom: 1px; width: 2px; background: #D6DFD9; }
+  .steps li:last-child::after { display: none; }
+  .steps li.done::before { background: var(--green); border-color: var(--green); }
+  .steps li.done::after { background: var(--green); }
+  .steps li.done span.tick { position: absolute; left: 4px; top: -1px; color: #fff; font-size: 12px; font-weight: 800; }
+  .steps li.current::before { border-color: var(--green); box-shadow: 0 0 0 4px rgba(26,107,58,.15); }
+  .steps li b { display: block; }
+  .steps li small { color: var(--muted); }
+  .steps li.todo { color: var(--muted); }
+
+  /* Urgent */
+  .urgent-card { background: var(--amber-bg); border: 1.5px solid var(--amber-line); border-left: 6px solid var(--amber); }
+  .urgent-card h3 { color: var(--amber); }
+  .urgent-card .call { display: block; text-decoration: none; text-align: center; margin-top: 6px; background: var(--amber); color: #fff; font-weight: 700; padding: 8px; border-radius: 10px; }
+  .urgent-card .call.alt { background: #fff; color: var(--amber); border: 1.5px solid var(--amber); }
+
+  /* Composer */
+  .composer { flex: none; display: flex; gap: 6px; align-items: center; padding: 8px; background: #F2F5F3; border-top: 1px solid var(--line); }
+  .composer input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 20px; padding: 10px 14px; font: inherit; background: #fff; }
+  .composer .round { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--green); color: #fff; font-size: 17px; flex: none; }
+  .composer .round.menu { background: #fff; color: var(--green); border: 1px solid var(--line); }
+
+  /* Agent console */
+  .console { position: absolute; inset: 58px 0 0 0; background: #F6F8FB; overflow-y: auto; padding: 12px; z-index: 5; }
+  .console[hidden] { display: none; }
+  .console h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--agent); margin: 14px 0 6px; }
+  .console h2:first-child { margin-top: 0; }
+  .panel { background: #fff; border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow); font-size: 13.5px; }
+  .panel + .panel { margin-top: 8px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 3px 8px; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  .flag { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; margin: 0 4px 4px 0; }
+  .flag.red { background: #FCE8E6; color: var(--red); }
+  .flag.amber { background: var(--amber-bg); color: var(--amber); }
+  .flag.blue { background: var(--agent-light); color: var(--agent); }
+  .flag.green { background: var(--green-light); color: var(--green-dark); }
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl li { padding: 6px 0; border-bottom: 1px solid #EDF0F4; }
+  .tl li:last-child { border: 0; }
+  .tl .t { font-size: 11px; color: var(--muted); }
+  .tl .intent { font-size: 11px; font-weight: 700; color: var(--agent); background: var(--agent-light); border-radius: 6px; padding: 1px 6px; margin-left: 4px; }
+  .tl .miss { color: var(--red); background: #FCE8E6; }
+  .reply-btn { display: block; width: 100%; text-align: left; border: 1px solid #CDD6E4; background: #fff; color: var(--agent); border-radius: 10px; padding: 8px 10px; margin-top: 6px; font-size: 13.5px; }
+  .reply-btn:hover { background: var(--agent-light); }
+  .take-over { width: 100%; border: 0; background: var(--agent); color: #fff; padding: 9px; border-radius: 10px; font-weight: 700; margin-top: 8px; }
+
+  /* Notes panel */
+  .notes { background: #fff; border-radius: 18px; box-shadow: var(--shadow); padding: 20px 22px; }
+  .notes h2 { margin: 0 0 4px; font-size: 20px; }
+  .notes h3 { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--green); }
+  .notes .lede { color: var(--muted); margin: 0; }
+  .evidence { list-style: none; margin: 0; padding: 0; }
+  .evidence li { padding: 9px 12px; background: var(--green-light); border-radius: 10px; margin-bottom: 6px; border-left: 4px solid var(--green); }
+  .evidence li.placeholder { background: #FFF8E8; border-left-color: var(--amber-line); color: #7A5A12; }
+  .decisions { margin: 0; padding-left: 18px; }
+  .decisions li { margin-bottom: 6px; }
+  .tries { display: flex; flex-wrap: wrap; gap: 6px; }
+  .try { border: 1px dashed var(--green); background: #fff; color: var(--green-dark); border-radius: 16px; padding: 5px 11px; font-size: 13px; }
+  .try:hover { background: var(--green-light); }
+  .demo-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; margin: 0; }
+  .demo-facts dt { color: var(--muted); }
+  .demo-facts dd { margin: 0; }
+
+  footer { background: var(--green-dark); color: #E7F1EC; margin-top: 12px; }
+  footer .in { max-width: 1180px; margin: 0 auto; padding: 18px 16px; display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; font-size: 13.5px; }
+  footer a { color: #fff; font-weight: 700; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1><span>StayEasy</span> Helper</h1>
+  <p>Guest assistant prototype · demo date <b>Thursday 4 February 2027</b> · all data is invented</p>
+</header>
+
+<main class="layout">
+  <section class="phone" aria-label="StayEasy Helper chat">
+    <div class="chat-head" id="chatHead">
+      <div class="avatar" id="headAvatar">SE</div>
+      <div class="who">
+        <b id="headName">StayEasy Helper</b>
+        <small id="headStatus">Online · team on hand 24/7</small>
+      </div>
+      <button class="toggle" id="agentToggle" aria-pressed="false" title="See what the StayEasy team sees">
+        <span>Agent view</span><span class="track" aria-hidden="true"></span>
+      </button>
+      <button class="icon-btn" id="restart" title="Restart the demo" aria-label="Restart the demo">↺</button>
+    </div>
+
+    <div class="chat" id="chat" aria-live="polite"></div>
+
+    <div class="cartbar" id="cartbar" hidden>
+      <span id="cartSummary">🛒</span>
+      <button data-act="viewCart" data-echo="View cart">View cart</button>
+    </div>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <button type="button" class="round menu" data-act="menu" data-echo="Menu" aria-label="Show menu" title="Menu">☰</button>
+      <label class="sr" for="msg">Message</label>
+      <input id="msg" placeholder="Type a message…" />
+      <button type="submit" class="round" aria-label="Send">➤</button>
+    </form>
+
+    <div class="console" id="console" hidden aria-label="Agent view"></div>
+  </section>
+
+  <aside class="notes" aria-label="Design notes">
+    <h2>Design notes</h2>
+    <p class="lede">A messaging-style assistant for StayEasy holiday-let guests. Taps do most of the work; typing always works too; a person is never more than one tap away.</p>
+
+    <h3>Evidence behind the design</h3>
+    <ul class="evidence" id="evidence"></ul>
+
+    <h3>Design decisions</h3>
+    <ul class="decisions">
+      <li><b>Buttons first, typing second.</b> Every step offers quick replies, and typed messages are routed by keyword so guests can skip ahead.</li>
+      <li><b>Show the policy before the action.</b> Fees and refund amounts are calculated from the stay date and shown <i>before</i> a guest confirms.</li>
+      <li><b>Two misunderstandings, then a person.</b> After two messages in a row the bot can't place, it offers a person instead of looping.</li>
+      <li><b>Urgent skips the menus.</b> Words like “leak” or “locked out” jump straight to the amber card, 999 advice and the on-call host.</li>
+      <li><b>Handover carries context.</b> The agent gets a summary, the booking and the transcript, so the guest never repeats themselves. Toggle <i>Agent view</i> to see it.</li>
+      <li><b>Wi-Fi by floor.</b> Rose Cottage has a router on each of its three floors, so the bot asks which floor you're on.</li>
+    </ul>
+
+    <h3>Try typing</h3>
+    <div class="tries" id="tries"></div>
+
+    <h3>Demo setup</h3>
+    <dl class="demo-facts">
+      <dt>Guest</dt><dd>Priya Patel: 2 upcoming stays, 1 past stay</dd>
+      <dt>Today</dt><dd>Thu 4 Feb 2027</dd>
+      <dt>Rose Cottage</dt><dd>12–15 Feb, 8 days away, so the under-2-weeks rule applies</dd>
+      <dt>Birchwood Cabin</dt><dd>18–22 Mar, 42 days away, so the date change is free</dd>
+      <dt>Refund</dt><dd>REF-2041 (Glen Lodge), payment on its way</dd>
+      <dt>Team</dt><dd>Joe (on-call host, urgent) · Sam (bookings)</dd>
+    </dl>
+  </aside>
+</main>
+
+<footer>
+  <div class="in">
+    <span>Designed by <span id="designer"></span> · <a id="linkedin" href="#" target="_blank" rel="noopener">Connect on LinkedIn</a></span>
+    <span>StayEasy is a fictional brand. No real bookings, payments or messages are made.</span>
+  </div>
+</footer>
+
+<script>
+/* =====================================================================
+   EDIT ME: your details for the footer and the Design notes panel
+   ===================================================================== */
+const CONFIG = {
+  designerName: "Your Name",                                  // TODO: your name
+  linkedinUrl: "https://www.linkedin.com/in/your-profile/",   // TODO: your LinkedIn URL
+  evidence: [                                                 // TODO: your four evidence lines
+    "Evidence line 1: replace with your research finding",
+    "Evidence line 2: replace with your research finding",
+    "Evidence line 3: replace with your research finding",
+    "Evidence line 4: replace with your research finding",
+  ],
+};
+
+/* =====================================================================
+   Sample data (all invented)
+   ===================================================================== */
+const TODAY = new Date(2027, 1, 4); // Thu 4 Feb 2027 (fixed demo date)
+const GUEST = { first: "Priya", last: "Patel", email: "priya.patel@example.com", phone: "07700 900123", card: "Visa ••4417", since: "2024", stays: 3 };
+
+const PROPS = {
+  rose: {
+    id: "rose", name: "Rose Cottage", place: "Bourton-on-the-Water, Cotswolds", icon: "🌹",
+    bg: "linear-gradient(135deg,#B5476B,#E59AAE)", sleeps: 6, bedrooms: 3, rate: 180, dogs: true,
+    address: "2 Mill Lane, Bourton-on-the-Water, GL54 2BY", parking: "2 spaces on the gravel drive",
+    keySafe: "4721", keySafeWhere: "left of the green front door",
+    features: ["3 floors", "Log burner", "Garden"],
+    wifi: [
+      { floor: "Ground floor", covers: "kitchen, living room, garden", ssid: "RoseCottage-Ground", pass: "honeysuckle42" },
+      { floor: "First floor", covers: "bedrooms 1 and 2, main bathroom", ssid: "RoseCottage-First", pass: "foxglove17" },
+      { floor: "Loft", covers: "bedroom 3 and the reading nook", ssid: "RoseCottage-Loft", pass: "lavender88" },
+    ],
+  },
+  birch: {
+    id: "birch", name: "Birchwood Cabin", place: "Windermere, Lake District", icon: "🌲",
+    bg: "linear-gradient(135deg,#2F6B47,#7DB58F)", sleeps: 4, bedrooms: 2, rate: 220, dogs: true,
+    address: "Birchwood, Brant Fell Road, Windermere, LA23 3AE", parking: "1 space by the cabin",
+    keySafe: "9053", keySafeWhere: "on the porch post",
+    features: ["Hot tub", "Lake views", "Woodland"],
+    wifi: [{ floor: "Whole cabin", covers: "everywhere incl. the hot tub deck", ssid: "Birchwood-Guest", pass: "lakeside2027" }],
+  },
+  glen: {
+    id: "glen", name: "Glen Lodge", place: "Aviemore, Scottish Highlands", icon: "🏔️",
+    bg: "linear-gradient(135deg,#3D4F7C,#8C9CC8)", sleeps: 8, bedrooms: 4, rate: 260, dogs: true,
+    address: "Glen Lodge, Rothiemurchus, Aviemore, PH22 1QH", parking: "Driveway for 3 cars",
+    keySafe: "3318", keySafeWhere: "beside the boot room door",
+    features: ["Sauna", "Mountain views", "Boot room"],
+    wifi: [{ floor: "Whole lodge", covers: "all rooms", ssid: "GlenLodge-Guest", pass: "cairngorm88" }],
+  },
+  sea: {
+    id: "sea", name: "Seaview Lodge", place: "St Ives, Cornwall", icon: "🌊",
+    bg: "linear-gradient(135deg,#1F6E8C,#7CC3D6)", sleeps: 4, bedrooms: 2, rate: 195, dogs: false,
+    address: "Seaview Lodge, Porthmeor Hill, St Ives, TR26 1PT", parking: "1 permit space",
+    keySafe: "6640", keySafeWhere: "inside the side gate",
+    features: ["Sea views", "Pet-free (allergy-friendly)", "5 min to beach"],
+    wifi: [{ floor: "Whole lodge", covers: "all rooms and the balcony", ssid: "Seaview-Guest", pass: "porthmeor21" }],
+  },
+};
+
+// Other guests' bookings (nights are [start, end) i.e. end = checkout day)
+const AVAIL = {
+  rose: [["2027-02-19", "2027-02-22"], ["2027-03-05", "2027-03-08"], ["2027-03-26", "2027-04-02"]],
+  birch: [["2027-02-06", "2027-02-09"], ["2027-02-12", "2027-02-14"], ["2027-02-26", "2027-03-01"], ["2027-03-12", "2027-03-16"], ["2027-03-25", "2027-03-29"]],
+  glen: [["2027-02-11", "2027-02-15"], ["2027-03-01", "2027-03-05"], ["2027-03-19", "2027-03-22"]],
+  sea: [["2027-02-05", "2027-02-08"], ["2027-02-13", "2027-02-20"], ["2027-03-10", "2027-03-14"]],
+};
+
+let BOOKINGS = [
+  { ref: "SE-10482", prop: "rose", start: "2027-02-12", end: "2027-02-15", guests: "2 adults, 1 dog", total: 540, status: "upcoming", extras: [] },
+  { ref: "SE-10517", prop: "birch", start: "2027-03-18", end: "2027-03-22", guests: "2 adults", total: 880, status: "upcoming", extras: [] },
+  { ref: "SE-09935", prop: "glen", start: "2027-01-22", end: "2027-01-26", guests: "4 adults, 1 dog", total: 1040, status: "past", extras: ["Firewood bundle"] },
+];
+
+const EXTRAS = [
+  { id: "late", name: "Late checkout (12pm)", icon: "🕛", price: 25, desc: "Two extra hours on your last morning." },
+  { id: "early", name: "Early check-in (1pm)", icon: "🔑", price: 25, desc: "Arrive three hours early." },
+  { id: "hamper", name: "Welcome hamper", icon: "🧺", price: 35, desc: "Local bread, cheese, wine and treats waiting for you." },
+  { id: "firewood", name: "Firewood bundle", icon: "🪵", price: 12, desc: "Seasoned logs and kindling for the burner.", only: ["rose", "glen", "birch"] },
+  { id: "dogpack", name: "Dog welcome pack", icon: "🐕", price: 15, desc: "Bed, bowls, towel and treats.", dogsOnly: true },
+  { id: "cot", name: "Cot & highchair", icon: "🍼", price: 10, desc: "Set up before you arrive." },
+  { id: "bikes", name: "Bike hire (2 bikes, per day)", icon: "🚲", price: 20, desc: "Helmets and locks included.", only: ["birch", "glen"] },
+];
+
+const POLICY = { freeChangeDays: 14, changeFee: 35, lateRefundPct: 50 };
+
+let REFUNDS = {
+  "REF-2041": {
+    id: "REF-2041", ref: "SE-09935", reason: "Sauna out of order for 2 nights at Glen Lodge", amount: 80,
+    steps: [
+      { label: "Request received", date: "Wed 27 Jan", state: "done" },
+      { label: "Reviewed by Joe", date: "Fri 29 Jan", state: "done" },
+      { label: "Refund approved: £80", date: "Tue 2 Feb", state: "done" },
+      { label: "Money back on your Visa ••4417", date: "Expected by Tue 9 Feb (banks take 3–5 working days)", state: "current" },
+    ],
+  },
+};
+
+const AGENTS = {
+  sam: { id: "sam", name: "Sam", role: "Bookings team", initials: "SA" },
+  joe: { id: "joe", name: "Joe", role: "On-call host", initials: "JO" },
+};
+
+/* =====================================================================
+   Helpers
+   ===================================================================== */
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = (n) => String(n).padStart(2, "0");
+const D = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const fmt = (s, o = { weekday: "short", day: "numeric", month: "short" }) => (typeof s === "string" ? D(s) : s).toLocaleDateString("en-GB", o);
+const nightsBetween = (a, b) => Math.round((D(b) - D(a)) / 864e5);
+const daysUntil = (s) => Math.round((D(s) - TODAY) / 864e5);
+const money = (n) => "£" + n.toLocaleString("en-GB");
+const clock = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const byRef = (ref) => BOOKINGS.find((b) => b.ref === ref);
+const upcoming = () => BOOKINGS.filter((b) => b.status === "upcoming").sort((a, b) => a.start.localeCompare(b.start));
+
+function btn(label, act, args = [], cls = "btn", echo) {
+  return `<button class="${cls}" data-act="${act}" data-args="${esc(JSON.stringify(args))}"${echo !== undefined ? ` data-echo="${esc(echo)}"` : ""}>${label}</button>`;
+}
+
+/* =====================================================================
+   State
+   ===================================================================== */
+const S = {
+  misses: 0,
+  awaiting: null,      // { type, ... } for typed answers to open questions
+  focusRef: null,      // booking currently being discussed
+  cart: [],
+  agent: null,         // agent id when a person is in the chat
+  urgent: false,
+  handoverReason: null,
+  log: [],             // { who, text, intent, how, time }
+  agentAutoNoteShown: false,
+  nextRef: 10601,
+  nextRefund: 2058,
+};
+
+/* =====================================================================
+   Message engine
+   ===================================================================== */
+const chat = $("#chat");
+let queue = Promise.resolve();
+const scroll = () => requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; });
+
+function append(node) { chat.appendChild(node); scroll(); return node; }
+function el(html) { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+
+function rowHTML(kind, inner, { wide = false, from = "" } = {}) {
+  return `<div class="row ${kind}"><div class="bubble${wide ? " wide" : ""}">${from ? `<span class="from">${esc(from)}</span>` : ""}${inner}${wide ? "" : `<span class="meta">${clock()}${kind === "user" ? " ✓✓" : ""}</span>`}</div></div>`;
+}
+
+/** Queue something to appear after the current bot output. fn returns a Node or HTML. */
+function post(fn, delay = 0) {
+  queue = queue.then(() => new Promise((res) => {
+    setTimeout(() => { const out = fn(); if (out) append(typeof out === "string" ? el(out) : out); res(); }, delay);
+  }));
+  return queue;
+}
+
+/** Bot (or agent) speaks with a typing indicator first. */
+function say(content, { wide = false, delay, as = null } = {}) {
+  const ms = delay ?? (wide ? 650 : Math.min(400 + String(content).length * 4, 1100));
+  queue = queue.then(() => new Promise((res) => {
+    const t = append(el(`<div class="row ${as ? "agent" : "bot"}"><div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div></div>`));
+    setTimeout(() => {
+      t.remove();
+      const from = as ? `${AGENTS[as].name} · StayEasy ${AGENTS[as].role}` : "";
+      if (content instanceof Node) {
+        const r = el(rowHTML(as ? "agent" : "bot", "", { wide: true }));
+        r.firstElementChild.appendChild(content); append(r);
+      } else append(el(rowHTML(as ? "agent" : "bot", content, { wide, from })));
+      if (as) S.log.push({ who: AGENTS[as].name, text: content instanceof Node ? "[card]" : stripTags(content), time: clock() });
+      renderConsole();
+      res();
+    }, ms);
+  }));
+  return queue;
+}
+const sayAs = (agentId, content) => say(content, { as: agentId });
+const stripTags = (h) => { const d = document.createElement("div"); d.innerHTML = h; return d.textContent; };
+
+function chips(list) {
+  post(() => {
+    const html = list.map(([label, act, args = [], cls = ""]) => btn(label, act, args, "chip " + cls)).join("");
+    return `<div class="chips">${html}</div>`;
+  });
+}
+function sys(text, cls = "") { post(() => `<div class="sys-pill ${cls}">${esc(text)}</div>`, 0); }
+
+function userSay(text) {
+  append(el(rowHTML("user", esc(text))));
+}
+
+/* =====================================================================
+   Card builders
+   ===================================================================== */
+function hero(p, tag = "") {
+  return `<div class="hero" style="background:${p.bg}"><span aria-hidden="true">${p.icon}</span>${tag ? `<span class="tag">${tag}</span>` : ""}</div>`;
+}
+
+function bookingCard(b, mode = "full") {
+  const p = PROPS[b.prop];
+  const n = nightsBetween(b.start, b.end);
+  const dLeft = daysUntil(b.start);
+  const pill = b.status === "upcoming" ? `<span class="pill up">In ${dLeft} days</span>` : b.status === "past" ? `<span class="pill past">Completed</span>` : `<span class="pill cancel">Cancelled</span>`;
+  let actions = "";
+  if (mode === "pick") actions = btn("Choose this stay", PICK.next, [b.ref], "btn", `${p.name} (${b.ref})`);
+  else if (b.status === "upcoming") actions =
+    btn("Check-in & Wi-Fi", "checkin", [b.ref], "btn", `Check-in info for ${p.name}`) +
+    btn("Add extras", "extras", [b.ref], "btn ghost", `Add extras to ${p.name}`) +
+    btn("Change dates", "change", [b.ref], "btn ghost", `Change dates for ${p.name}`) +
+    btn("Cancel", "cancel", [b.ref], "btn danger", `Cancel ${p.name}`);
+  else if (b.status === "past") actions =
+    btn("Refund status (REF-2041)", "refundStatus", ["REF-2041"], "btn ghost", "Refund status") +
+    btn("Book again", "propDates", [b.prop], "btn", `Book ${p.name} again`);
+  return `<div class="card">${hero(p, b.ref)}<div class="body">
+      <h3>${p.name} ${pill}</h3><p class="sub">${p.place}</p>
+      <ul class="facts">
+        <li><span>Dates</span><span>${fmt(b.start)} → ${fmt(b.end)}</span></li>
+        <li><span>Nights</span><span>${n}</span></li>
+        <li><span>Guests</span><span>${b.guests}</span></li>
+        <li><span>Total</span><span>${money(b.total)}</span></li>
+        ${b.extras.length ? `<li><span>Extras</span><span>${b.extras.join(", ")}</span></li>` : ""}
+      </ul>
+      <div class="actions">${actions}</div></div></div>`;
+}
+
+function propertyCard(p, extraAction = true) {
+  return `<div class="card">${hero(p, p.dogs ? "🐾 Dog-friendly" : "No dogs")}<div class="body">
+    <h3>${p.name}</h3><p class="sub">${p.place}</p>
+    <ul class="facts">
+      <li><span>Sleeps</span><span>${p.sleeps} · ${p.bedrooms} bedrooms</span></li>
+      <li><span>From</span><span>${money(p.rate)} / night</span></li>
+      <li><span>Highlights</span><span>${p.features.join(" · ")}</span></li>
+    </ul>
+    <div class="actions">${extraAction ? btn("Check dates", "propDates", [p.id], "btn", `Check dates for ${p.name}`) : ""}</div></div></div>`;
+}
+
+function carousel(cardsHTML, hint = "Swipe for more →") {
+  const wrap = el(`<div class="carousel-wrap"><div class="carousel">${cardsHTML.join("")}</div>
+    ${cardsHTML.length > 1 ? `<button class="car-nav prev" aria-label="Previous">‹</button><button class="car-nav next" aria-label="Next">›</button><p class="car-hint">${hint}</p>` : ""}</div>`);
+  const track = wrap.querySelector(".carousel");
+  if (cardsHTML.length === 1) track.firstElementChild.style.flexBasis = "100%";
+  wrap.querySelectorAll(".car-nav").forEach((b) => b.addEventListener("click", () => {
+    track.scrollBy({ left: (b.classList.contains("next") ? 1 : -1) * track.clientWidth * 0.8, behavior: "smooth" });
+  }));
+  return wrap;
+}
+
+function steps(list) {
+  return `<ol class="steps">${list.map((s) => `<li class="${s.state}">${s.state === "done" ? '<span class="tick">✓</span>' : ""}<b>${s.label}</b><small>${s.date}</small></li>`).join("")}</ol>`;
+}
+
+/* =====================================================================
+   Mini calendar
+   ===================================================================== */
+function bookedNights(propId, excludeRef) {
+  const set = new Set();
+  const add = (a, b) => { for (let d = D(a); d < D(b); d = addDays(d, 1)) set.add(iso(d)); };
+  (AVAIL[propId] || []).forEach(([a, b]) => add(a, b));
+  BOOKINGS.filter((b) => b.prop === propId && b.status !== "cancelled" && b.status !== "past" && b.ref !== excludeRef).forEach((b) => add(b.start, b.end));
+  S.cart.filter((c) => c.kind === "stay" && c.prop === propId).forEach((c) => add(c.start, c.end));
+  return set;
+}
+
+function calendar({ propId, excludeRef = null, month, title, confirmLabel = "Confirm dates", onConfirm }) {
+  const p = PROPS[propId];
+  const booked = bookedNights(propId, excludeRef);
+  const minView = new Date(2027, 1, 1), maxView = new Date(2027, 5, 1);
+  let view = new Date(month.getFullYear(), month.getMonth(), 1);
+  let a = null, b = null, warn = "";
+  const root = el(`<div class="card"><div class="cal"></div></div>`);
+  const cal = root.firstElementChild;
+  const free = (s, e) => { for (let d = D(s); d < D(e); d = addDays(d, 1)) if (booked.has(iso(d))) return false; return true; };
+
+  function render() {
+    const y = view.getFullYear(), m = view.getMonth();
+    const first = new Date(y, m, 1), lead = (first.getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
+    let cells = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => `<span class="dow">${d}</span>`).join("");
+    for (let i = 0; i < lead; i++) cells += "<span></span>";
+    for (let d = 1; d <= days; d++) {
+      const date = new Date(y, m, d), k = iso(date);
+      const cls = ["day"];
+      const past = date < TODAY;
+      if (past) cls.push("past");
+      else if (booked.has(k)) cls.push("booked");
+      if (+date === +TODAY) cls.push("today");
+      if (a && k === a) cls.push("start");
+      if (b && k === b) cls.push("end");
+      if (a && b && k > a && k < b) cls.push("range");
+      const label = `${fmt(date, { weekday: "long", day: "numeric", month: "long" })}${booked.has(k) ? ", booked" : ""}`;
+      cells += `<button class="${cls.join(" ")}" data-day="${k}" ${past ? "disabled" : ""} aria-label="${label}">${d}</button>`;
+    }
+    let sum = "Tap your arrival date, then your departure date.";
+    if (a && !b) sum = `Arrive ${fmt(a)}. Now tap your departure date.`;
+    if (a && b) { const n = nightsBetween(a, b); sum = `<b>${fmt(a)} → ${fmt(b)}</b> · ${n} nights · ${money(n * p.rate)}`; }
+    cal.innerHTML = `
+      <p class="sub" style="margin:0 0 6px"><b style="color:var(--ink)">${title || p.name}</b></p>
+      <div class="cal-head">
+        <button data-nav="-1" ${view <= minView ? "disabled" : ""} aria-label="Previous month">‹</button>
+        <b>${fmt(view, { month: "long", year: "numeric" })}</b>
+        <button data-nav="1" ${view >= maxView ? "disabled" : ""} aria-label="Next month">›</button>
+      </div>
+      <div class="cal-grid">${cells}</div>
+      <div class="cal-legend"><span><i style="background:var(--green)"></i>Your dates</span><span><i style="background:repeating-linear-gradient(135deg,#F1F3F2 0 3px,#DDE2DF 3px 6px)"></i>Booked</span><span><i style="box-shadow:inset 0 0 0 2px var(--navy)"></i>Today</span></div>
+      <p class="cal-sum ${warn ? "warn" : ""}">${warn || sum}</p>
+      <button class="btn" data-confirm style="width:100%" ${a && b ? "" : "disabled"}>${confirmLabel}</button>`;
+  }
+
+  cal.addEventListener("click", (e) => {
+    const nav = e.target.closest("[data-nav]");
+    if (nav) { view = new Date(view.getFullYear(), view.getMonth() + Number(nav.dataset.nav), 1); render(); return; }
+    if (e.target.closest("[data-confirm]")) {
+      cal.classList.add("locked"); e.target.closest("[data-confirm]").disabled = true;
+      userSay(`${fmt(a)} → ${fmt(b)}`);
+      onConfirm(a, b); return;
+    }
+    const day = e.target.closest("[data-day]"); if (!day) return;
+    const k = day.dataset.day; warn = "";
+    if (!a || b || k <= a) {
+      if (booked.has(k)) { warn = `${fmt(k)} is already booked. Pick another arrival date.`; a = null; b = null; }
+      else { a = k; b = null; }
+    } else {
+      const n = nightsBetween(a, k);
+      if (n < 2) warn = "The minimum stay is 2 nights.";
+      else if (n > 14) warn = "For stays over 14 nights, please talk to the team.";
+      else if (!free(a, k)) warn = "Some nights in that range are already booked.";
+      else b = k;
+    }
+    render();
+  });
+  render();
+  return root;
+}
+
+/* =====================================================================
+   Cart
+   ===================================================================== */
+function cartTotal() { return S.cart.reduce((t, c) => t + c.price, 0); }
+function updateCartBar() {
+  const bar = $("#cartbar");
+  bar.hidden = S.cart.length === 0;
+  $("#cartSummary").textContent = `🛒 ${S.cart.length} item${S.cart.length === 1 ? "" : "s"} · ${money(cartTotal())}`;
+  renderConsole();
+}
+function cartCard() {
+  if (!S.cart.length) return `<div class="card"><div class="body"><h3>Your cart is empty</h3><p class="note">Add extras to a booking or pick dates for a new stay.</p></div></div>`;
+  const lines = S.cart.map((c, i) => `<div class="cart-line"><span>${c.icon}</span><div class="grow">${c.name}<small>${c.detail}</small></div><b>${money(c.price)}</b><button class="rm" data-rm="${i}" aria-label="Remove ${esc(c.name)}">×</button></div>`).join("");
+  return `<div class="card cart-card"><div class="body"><h3>Your cart</h3>${lines}
+    <div class="cart-total"><span>Total</span><span>${money(cartTotal())}</span></div>
+    <div class="actions">${btn(`Checkout · ${money(cartTotal())}`, "checkout", [], "btn", "Checkout")}${btn("Keep browsing", "menu", [], "btn ghost", "Keep browsing")}</div></div></div>`;
+}
+chat.addEventListener("click", (e) => {
+  const rm = e.target.closest("[data-rm]"); if (!rm) return;
+  const item = S.cart.splice(Number(rm.dataset.rm), 1)[0];
+  const card = rm.closest(".cart-card");
+  card.outerHTML = cartCard();
+  document.querySelectorAll(`[data-extra-key="${item.key}"]`).forEach((b) => { b.classList.remove("added"); b.textContent = `Add · ${money(item.price)}`; });
+  updateCartBar();
+});
+
+/* =====================================================================
+   Booking picker (for flows that need a booking first)
+   ===================================================================== */
+const PICK = { next: null };
+function pickBooking(next, question, list = upcoming()) {
+  if (list.length === 1) return A[next](list[0].ref);
+  PICK.next = next;
+  S.awaiting = { type: "booking", next };
+  say(question);
+  post(() => carousel(list.map((b) => bookingCard(b, "pick"))));
+}
+
+/* =====================================================================
+   Flows
+   ===================================================================== */
+const MENU = [
+  ["My bookings", "bookings"], ["Check-in & Wi-Fi", "checkin"], ["Change dates", "change"],
+  ["Cancel or refund", "cancelOrRefund"], ["Add extras", "extras"], ["Book a new stay", "newStay"],
+  ["Bringing a dog?", "pets"], ["⚠ Urgent problem", "urgent", [], "urgent"], ["Talk to a person", "human", [], "person"],
+];
+
+const A = {
+  welcome() {
+    sys("Today");
+    say(`Hi ${GUEST.first} 👋 I'm <b>StayEasy Helper</b>. I can sort most things in a few taps, and I can bring in a person from our team at any time.`);
+    const next = upcoming()[0];
+    say(`Your next stay is <b>${PROPS[next.prop].name}</b> in ${daysUntil(next.start)} days.`);
+    post(() => carousel([bookingCard(next)]));
+    say("What can I help with?");
+    chips(MENU);
+  },
+
+  menu() { S.awaiting = null; say("Here's what I can help with:"); chips(MENU); },
+
+  bookings() {
+    say(`You have ${upcoming().length} upcoming stay${upcoming().length === 1 ? "" : "s"} and ${BOOKINGS.filter((b) => b.status !== "upcoming").length} other.`);
+    const order = [...upcoming(), ...BOOKINGS.filter((b) => b.status !== "upcoming")];
+    post(() => carousel(order.map((b) => bookingCard(b))));
+    chips([["Main menu", "menu"]]);
+  },
+
+  /* ---- Check-in & Wi-Fi ---- */
+  checkin(ref) {
+    if (!ref) ref = upcoming()[0]?.ref;
+    if (!ref) { say("You don't have an upcoming stay right now."); return chips([["Book a new stay", "newStay"], ["Main menu", "menu"]]); }
+    const b = byRef(ref), p = PROPS[b.prop]; S.focusRef = ref;
+    const left = daysUntil(b.start);
+    const release = fmt(addDays(D(b.start), -1), { weekday: "short", day: "numeric", month: "short" });
+    const key = left <= 1 ? `<b>${p.keySafe}</b> (key safe ${p.keySafeWhere})` : `Sent to you at 9am on ${release}, the day before you arrive`;
+    say(`<div class="card"><div class="body">
+      <h3>Check-in: ${p.name}</h3><p class="sub">${fmt(b.start, { weekday: "long", day: "numeric", month: "long" })} · ${b.ref}</p>
+      <ul class="facts">
+        <li><span>Check-in</span><span>from 4pm</span></li>
+        <li><span>Checkout</span><span>by 10am, ${fmt(b.end)}</span></li>
+        <li><span>Address</span><span>${p.address}</span></li>
+        <li><span>Parking</span><span>${p.parking}</span></li>
+        <li><span>Key safe code</span><span>${key}</span></li>
+      </ul>
+      <a class="btn ghost" style="display:block;text-decoration:none" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}" target="_blank" rel="noopener">Open directions ↗</a>
+    </div></div>`, { wide: true });
+    if (p.wifi.length > 1) {
+      say(`${p.name} has <b>${p.wifi.length} floors with a router on each</b>. Which floor will you be on? I'll give you the strongest network.`);
+      S.awaiting = { type: "floor", ref };
+      chips([...p.wifi.map((w, i) => [w.floor, "wifi", [ref, i]]), ["All floors", "wifi", [ref, -1]]]);
+    } else {
+      A.wifi(ref, 0, true);
+    }
+  },
+
+  wifi(ref, floor = null, fromCheckin = false) {
+    if (!ref) ref = upcoming()[0]?.ref;
+    const b = byRef(ref), p = PROPS[b.prop]; S.focusRef = ref;
+    if (floor === null && p.wifi.length > 1) {
+      S.awaiting = { type: "floor", ref };
+      say(`${p.name} has a router on each of its ${p.wifi.length} floors. Which floor are you on?`);
+      return chips([...p.wifi.map((w, i) => [w.floor, "wifi", [ref, i]]), ["All floors", "wifi", [ref, -1]]]);
+    }
+    S.awaiting = null;
+    const list = floor === -1 ? p.wifi : [p.wifi[floor]];
+    const box = list.map((w) => `<div class="wifi"><b>${w.floor}: ${w.covers}</b>Network: ${w.ssid}<br>Password: ${w.pass} <button class="copy" data-copy="${w.pass}">Copy</button></div>`).join("");
+    say(`<p>📶 Wi-Fi for ${p.name}${fromCheckin ? "" : ` (${b.ref})`}:</p>${box}${list.length === 1 && p.wifi.length > 1 ? `<p class="note">Moving between floors? Your phone may stay on a weaker network. Switch to the one for the floor you're on.</p>` : ""}`);
+    chips([["Something else", "menu"], ["Talk to a person", "human", [], "person"]]);
+  },
+
+  /* ---- Change dates ---- */
+  change(ref) {
+    if (!ref) return pickBooking("change", "Which stay would you like to move?");
+    const b = byRef(ref), p = PROPS[b.prop]; S.focusRef = ref; S.awaiting = null;
+    if (b.status !== "upcoming") { say(`${p.name} (${ref}) can't be changed because it's ${b.status}.`); return chips([["Main menu", "menu"]]); }
+    const left = daysUntil(b.start), free = left >= POLICY.freeChangeDays;
+    say(`<div class="card policy ${free ? "" : "fee"}"><div class="body">
+      <h3>Changing ${p.name}</h3><p class="sub">${fmt(b.start)} → ${fmt(b.end)} · starts in ${left} days</p>
+      <div class="outcome">${free ? "Free to change" : `${money(POLICY.changeFee)} change fee`}</div>
+      <p class="note">${free ? `Your stay is more than 2 weeks away, so moving it is free. You only pay any difference in price.` : `Your stay starts in under 2 weeks, so a ${money(POLICY.changeFee)} fee applies, plus any difference in price.`}</p>
+    </div></div>`, { wide: true });
+    say("Pick your new dates. Struck-through nights are already booked.");
+    post(() => calendar({
+      propId: b.prop, excludeRef: ref, month: D(b.start), title: `New dates for ${p.name}`, confirmLabel: "Use these dates",
+      onConfirm: (s, e) => A.changeReview(ref, s, e),
+    }));
+  },
+
+  changeReview(ref, s, e) {
+    const b = byRef(ref), p = PROPS[b.prop];
+    const n = nightsBetween(s, e), newTotal = n * p.rate, diff = newTotal - b.total;
+    const fee = daysUntil(b.start) >= POLICY.freeChangeDays ? 0 : POLICY.changeFee;
+    const due = diff + fee;
+    S.pendingChange = { ref, s, e, newTotal, due };
+    say(`<div class="card"><div class="body"><h3>Check your change</h3>
+      <ul class="facts">
+        <li><span>Was</span><span>${fmt(b.start)} → ${fmt(b.end)} · ${money(b.total)}</span></li>
+        <li><span>New</span><span>${fmt(s)} → ${fmt(e)} · ${n} nights · ${money(newTotal)}</span></li>
+        <li><span>Price difference</span><span>${diff >= 0 ? "+" : "−"}${money(Math.abs(diff))}</span></li>
+        <li><span>Change fee</span><span>${fee ? money(fee) : "Free"}</span></li>
+        <li><span><b>${due >= 0 ? "To pay now" : "We'll refund"}</b></span><span><b>${money(Math.abs(due))}</b></span></li>
+      </ul></div></div>`, { wide: true });
+    chips([[`Confirm change`, "changeConfirm"], ["Pick different dates", "change", [ref]], ["Talk to a person", "human", ["date change"], "person"]]);
+  },
+
+  changeConfirm() {
+    const c = S.pendingChange; if (!c) return A.menu();
+    const b = byRef(c.ref);
+    Object.assign(b, { start: c.s, end: c.e, total: c.newTotal }); S.pendingChange = null;
+    say(`Done ✅ ${PROPS[b.prop].name} is now <b>${fmt(c.s)} → ${fmt(c.e)}</b>. ${c.due > 0 ? `${money(c.due)} was charged to your ${GUEST.card}.` : c.due < 0 ? `${money(-c.due)} is on its way back to your ${GUEST.card}.` : "Nothing more to pay."} A confirmation is in your inbox.`);
+    post(() => carousel([bookingCard(b)]));
+    chips([["Add extras", "extras", [b.ref]], ["Main menu", "menu"]]);
+  },
+
+  /* ---- Cancel & refunds ---- */
+  cancelOrRefund() {
+    say("Sure. Which do you need?");
+    chips([["Cancel a booking", "cancel"], ["Check refund status (REF-2041)", "refundStatus", ["REF-2041"]], ["Talk to a person", "human", ["refund"], "person"]]);
+  },
+
+  cancel(ref) {
+    if (!ref) return pickBooking("cancel", "Which stay would you like to cancel?");
+    const b = byRef(ref), p = PROPS[b.prop]; S.focusRef = ref; S.awaiting = null;
+    if (b.status !== "upcoming") { say(`${p.name} (${ref}) is ${b.status}, so it can't be cancelled.`); return chips([["Refund status", "refundStatus", ["REF-2041"]], ["Main menu", "menu"]]); }
+    const left = daysUntil(b.start), full = left >= POLICY.freeChangeDays;
+    const refund = full ? b.total : Math.round(b.total * POLICY.lateRefundPct / 100);
+    S.pendingCancel = { ref, refund };
+    say(`<div class="card policy ${full ? "" : "fee"}"><div class="body">
+      <h3>Cancelling ${p.name}</h3><p class="sub">${fmt(b.start)} → ${fmt(b.end)} · starts in ${left} days</p>
+      <div class="outcome">${full ? `Full refund: ${money(refund)}` : `${POLICY.lateRefundPct}% refund: ${money(refund)} of ${money(b.total)}`}</div>
+      <p class="note">${full ? "Your stay is more than 2 weeks away, so you get everything back." : `Your stay starts in under 2 weeks, so our under-2-weeks rule gives a ${POLICY.lateRefundPct}% refund.`}</p>
+    </div></div>`, { wide: true });
+    if (!full) {
+      say(`Changing dates could suit you better: it costs ${money(POLICY.changeFee)} and you keep your full stay.`);
+      chips([["Change dates instead", "change", [ref]], ["Cancel anyway", "cancelAsk", [ref], "urgent"], ["Talk to a person", "human", ["cancellation"], "person"], ["Keep my booking", "keep"]]);
+    } else chips([["Cancel booking", "cancelAsk", [ref], "urgent"], ["Change dates instead", "change", [ref]], ["Keep my booking", "keep"]]);
+  },
+
+  cancelAsk(ref) {
+    const b = byRef(ref);
+    say(`Just to check: cancel <b>${PROPS[b.prop].name}</b> (${ref}) and refund <b>${money(S.pendingCancel.refund)}</b>? This can't be undone.`);
+    chips([[`Yes, cancel ${ref}`, "cancelConfirm", [ref], "urgent"], ["No, keep it", "keep"]]);
+  },
+
+  cancelConfirm(ref) {
+    const b = byRef(ref), p = PROPS[b.prop], refund = S.pendingCancel.refund;
+    b.status = "cancelled"; S.pendingCancel = null;
+    const id = `REF-${S.nextRefund++}`;
+    REFUNDS[id] = { id, ref, reason: `Cancellation of ${p.name}`, amount: refund, steps: [
+      { label: "Cancellation confirmed", date: fmt(TODAY), state: "done" },
+      { label: `Refund approved: ${money(refund)}`, date: "Automatic, per policy", state: "done" },
+      { label: `Money back on your ${GUEST.card}`, date: `Expected by ${fmt(addDays(TODAY, 5))}`, state: "current" },
+    ] };
+    say(`${p.name} is cancelled. Your refund is <b>${id}</b>.`);
+    say(`<div class="card"><div class="body"><h3>Refund ${id} · ${money(refund)}</h3>${steps(REFUNDS[id].steps)}</div></div>`, { wide: true });
+    chips([["Book a new stay", "newStay"], ["Main menu", "menu"]]);
+  },
+
+  keep() { S.pendingCancel = null; say("No problem. Your booking stays as it is. 👍"); chips([["Main menu", "menu"]]); },
+
+  refundStatus(id = "REF-2041") {
+    const r = REFUNDS[id] || REFUNDS["REF-2041"]; S.focusRef = r.ref;
+    say(`<div class="card"><div class="body"><h3>Refund ${r.id} · ${money(r.amount)}</h3><p class="sub">${r.reason} · ${r.ref}</p>${steps(r.steps)}</div></div>`, { wide: true });
+    say(r.id === "REF-2041" ? "Good news: it's approved and the money has been sent. It usually shows on your statement within 3–5 working days." : "It's approved and on its way.");
+    chips([["It hasn't arrived", "human", ["refund not arrived"], "person"], ["Main menu", "menu"]]);
+  },
+
+  /* ---- Extras ---- */
+  extras(ref) {
+    if (!ref) return pickBooking("extras", "Which stay are the extras for?");
+    const b = byRef(ref), p = PROPS[b.prop]; S.focusRef = ref; S.awaiting = null;
+    if (b.status !== "upcoming") { say("Extras can only be added to upcoming stays."); return chips([["Main menu", "menu"]]); }
+    const list = EXTRAS.filter((x) => (!x.only || x.only.includes(p.id)) && (!x.dogsOnly || p.dogs) && !b.extras.includes(x.name));
+    say(`Extras for <b>${p.name}</b> (${fmt(b.start)}). Tap <b>Add</b>, then check out when you're ready.`);
+    post(() => carousel(list.map((x) => {
+      const key = `${ref}:${x.id}`, inCart = S.cart.some((c) => c.key === key);
+      return `<div class="card"><div class="hero" style="background:${p.bg};height:64px"><span>${x.icon}</span></div><div class="body">
+        <h3>${x.name}</h3><p class="sub">${x.desc}</p><p style="margin:0;font-weight:800">${money(x.price)}</p>
+        <div class="actions"><button class="btn ${inCart ? "added" : ""}" data-extra-key="${key}" data-extra="${x.id}" data-ref="${ref}">${inCart ? "Added ✓" : `Add · ${money(x.price)}`}</button></div></div></div>`;
+    })));
+    chips([["View cart", "viewCart"], ["Main menu", "menu"]]);
+  },
+
+  viewCart() { say(cartCard(), { wide: true }); },
+
+  checkout() {
+    if (!S.cart.length) return A.viewCart();
+    say(`Pay <b>${money(cartTotal())}</b> with your saved ${GUEST.card}?`);
+    chips([[`Pay ${money(cartTotal())}`, "pay"], ["Back to cart", "viewCart"]]);
+  },
+
+  pay() {
+    if (!S.cart.length) return A.viewCart();
+    const lines = [];
+    S.cart.forEach((c) => {
+      if (c.kind === "extra") { byRef(c.ref).extras.push(c.name); lines.push(`${c.name} → ${PROPS[byRef(c.ref).prop].name}`); }
+      if (c.kind === "stay") {
+        const ref = `SE-${S.nextRef++}`;
+        BOOKINGS.push({ ref, prop: c.prop, start: c.start, end: c.end, guests: c.dog ? "2 adults, 1 dog" : "2 adults", total: c.price, status: "upcoming", extras: [] });
+        lines.push(`${PROPS[c.prop].name}, ${fmt(c.start)} → ${fmt(c.end)} (${ref})`);
+      }
+    });
+    const total = cartTotal(); S.cart = []; updateCartBar();
+    document.querySelectorAll("[data-extra-key].added").forEach((b) => { b.disabled = true; b.textContent = "Booked ✓"; });
+    say(`Payment of ${money(total)} done ✅<br>${lines.map((l) => "• " + l).join("<br>")}<br><span class="note">Receipt sent to ${GUEST.email}.</span>`);
+    chips([["My bookings", "bookings"], ["Main menu", "menu"]]);
+  },
+
+  /* ---- New stay ---- */
+  newStay() {
+    S.awaiting = null;
+    say("Lovely! Will you be bringing a dog? I'll only show places that suit you.");
+    chips([["Yes, with my dog 🐕", "newStayList", [true]], ["No dog", "newStayList", [false]]]);
+  },
+
+  newStayList(dog) {
+    S.newStayDog = dog;
+    const list = Object.values(PROPS).filter((p) => !dog || p.dogs);
+    say(dog ? `These ${list.length} welcome dogs. Seaview Lodge is left out because it's kept pet-free for guests with allergies.` : "Here are all our places:");
+    post(() => carousel(list.map((p) => propertyCard(p))));
+  },
+
+  propDates(propId) {
+    const p = PROPS[propId]; S.awaiting = null;
+    say(`Pick dates for <b>${p.name}</b> (${money(p.rate)}/night, 2-night minimum).`);
+    post(() => calendar({ propId, month: new Date(2027, 1, 1), confirmLabel: "Add to cart", onConfirm: (s, e) => A.stayAdd(propId, s, e) }));
+  },
+
+  stayAdd(propId, s, e) {
+    const p = PROPS[propId], n = nightsBetween(s, e);
+    S.cart.push({ kind: "stay", key: `stay:${propId}:${s}`, prop: propId, start: s, end: e, dog: !!S.newStayDog, icon: p.icon, name: p.name, detail: `${fmt(s)} → ${fmt(e)} · ${n} nights`, price: n * p.rate });
+    updateCartBar();
+    say(`Added <b>${p.name}</b>, ${fmt(s)} → ${fmt(e)}, to your cart.`);
+    chips([["Checkout", "checkout"], ["View cart", "viewCart"], ["Keep browsing", "newStay"]]);
+  },
+
+  /* ---- Pets ---- */
+  pets(propId) {
+    if (!propId) {
+      S.awaiting = { type: "property", next: "pets" };
+      say("Which place are you thinking of?");
+      return chips(Object.values(PROPS).map((p) => [p.name, "pets", [p.id]]));
+    }
+    S.awaiting = null;
+    const p = PROPS[propId];
+    if (p.dogs) {
+      say(`🐾 Yes, <b>${p.name}</b> is dog-friendly. Up to 2 dogs stay free. Please keep them off beds and sofas, and there's a towel by the door for muddy paws.`);
+      const mine = upcoming().find((b) => b.prop === propId);
+      chips([...(mine ? [["Add a dog welcome pack (£15)", "extras", [mine.ref]]] : [["Check dates", "propDates", [propId]]]), ["Main menu", "menu"]]);
+    } else {
+      say(`Sorry, <b>${p.name}</b> isn't dog-friendly. We keep it pet-free for guests with allergies, so we can't make exceptions. These places welcome dogs:`);
+      post(() => carousel(Object.values(PROPS).filter((x) => x.dogs).map((x) => propertyCard(x))));
+      chips([["Talk to a person", "human", ["pets at Seaview"], "person"], ["Main menu", "menu"]]);
+    }
+  },
+
+  /* ---- Urgent ---- */
+  urgent(kind) {
+    S.urgent = true; S.awaiting = null;
+    say(`<div class="card urgent-card"><div class="body">
+      <h3>⚠ Urgent help</h3>
+      <p style="margin:4px 0">If anyone is in danger, <b>call 999 now</b>.<br>If you smell gas, leave the property and call the gas emergency line.</p>
+      <a class="call" href="tel:999">Call 999</a>
+      <a class="call alt" href="tel:08001119999">Gas emergency: 0800 111 999</a>
+      <p class="note" style="color:#7A5A12">For anything else, our on-call host can be with you in minutes, day or night.</p>
+    </div></div>`, { wide: true, delay: 300 });
+    if (!kind) {
+      say("What's happening?", { delay: 300 });
+      return chips([["Locked out", "urgent", ["locked out"], "urgent"], ["No heating or hot water", "urgent", ["no heating"], "urgent"], ["Water leak", "urgent", ["water leak"], "urgent"], ["Something else urgent", "urgent", ["other urgent"], "urgent"]]);
+    }
+    const tips = {
+      "locked out": "If the key safe won't open, check you're using the latest code from your arrival message.",
+      "no heating": "The boiler reset button is in the kitchen cupboard. Hold it for 5 seconds.",
+      "water leak": "If you can, turn the water off at the stopcock under the kitchen sink.",
+    };
+    if (tips[kind]) say(`While I connect you: ${tips[kind]}`, { delay: 300 });
+    A.human(`URGENT: ${kind}`, "joe");
+  },
+
+  /* ---- Live agent handover ---- */
+  human(reason, agentId) {
+    if (S.agent) { say(`${AGENTS[S.agent].name} is already in this chat. Just type your message.`); return; }
+    const urgent = (reason || "").startsWith("URGENT") || S.urgent;
+    const who = AGENTS[agentId || (urgent ? "joe" : "sam")];
+    S.handoverReason = reason || lastTopic() || "General question";
+    S.awaiting = null;
+    if (!urgent) say(`I'll bring in a person from our team. I've shared this chat with them, so you won't need to repeat anything.`);
+    sys(urgent ? `Priority queue · ${who.name} will be with you in under 2 min` : `Waiting for ${who.name} · usually under 3 min`);
+    post(() => {
+      S.agent = who.id; setHeader(); renderConsole();
+      return `<div class="sys-pill agent">${who.name} (${who.role}) joined the chat</div>`;
+    }, 1600);
+    const b = S.focusRef ? byRef(S.focusRef) : null;
+    const ctx = b ? ` I can see your ${PROPS[b.prop].name} booking (${b.ref})` : "";
+    sayAs(who.id, urgent
+      ? `Hi ${GUEST.first}, I'm ${who.name}, the on-call host. I've got your message about <b>${esc(S.handoverReason.replace("URGENT: ", ""))}</b>.${ctx}. I'm on it. Can you tell me exactly what you're seeing?`
+      : `Hi ${GUEST.first}, ${who.name} here from the ${who.role}.${ctx ? ctx + " and" : " I can see"} that you were asking about <b>${esc(S.handoverReason)}</b>. How can I help?`);
+    chips([["Back to StayEasy Helper", "endAgent"]]);
+  },
+
+  endAgent() {
+    if (!S.agent) return A.menu();
+    const who = AGENTS[S.agent];
+    sayAs(who.id, `Thanks ${GUEST.first}. I'll hand you back to StayEasy Helper. Message any time if you need us again.`);
+    post(() => { S.agent = null; S.urgent = false; setHeader(); renderConsole(); return `<div class="sys-pill">${who.name} left the chat</div>`; });
+    say("I'm back. Anything else?"); chips(MENU);
+  },
+};
+
+/* Extra add buttons inside extras carousel */
+chat.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-extra]"); if (!b || b.disabled) return;
+  const x = EXTRAS.find((y) => y.id === b.dataset.extra), ref = b.dataset.ref, key = b.dataset.extraKey;
+  const i = S.cart.findIndex((c) => c.key === key);
+  if (i >= 0) { S.cart.splice(i, 1); b.classList.remove("added"); b.textContent = `Add · ${money(x.price)}`; }
+  else {
+    const bk = byRef(ref);
+    S.cart.push({ kind: "extra", key, ref, icon: x.icon, name: x.name, detail: `${PROPS[bk.prop].name} · ${bk.ref}`, price: x.price });
+    b.classList.add("added"); b.textContent = "Added ✓ (tap to remove)";
+    logEvent(`Added ${x.name} to cart`, "Add extras", "tap");
+  }
+  updateCartBar();
+});
+chat.addEventListener("click", (e) => {
+  const c = e.target.closest("[data-copy]"); if (!c) return;
+  navigator.clipboard?.writeText(c.dataset.copy).catch(() => {});
+  c.textContent = "Copied ✓"; setTimeout(() => (c.textContent = "Copy"), 1500);
+});
+
+/* =====================================================================
+   Routing: taps
+   ===================================================================== */
+const INTENT_LABEL = {
+  welcome: "Start", menu: "Menu", bookings: "My bookings", checkin: "Check-in info", wifi: "Wi-Fi", change: "Change dates",
+  changeReview: "Change dates", changeConfirm: "Change dates: confirmed", cancelOrRefund: "Cancel or refund", cancel: "Cancel booking",
+  cancelAsk: "Cancel booking", cancelConfirm: "Cancel: confirmed", keep: "Keep booking", refundStatus: "Refund status", extras: "Add extras",
+  viewCart: "Cart", checkout: "Checkout", pay: "Payment", newStay: "Book a new stay", newStayList: "Book a new stay", propDates: "Check availability",
+  stayAdd: "Add stay to cart", pets: "Pet policy", urgent: "URGENT", human: "Talk to a person", endAgent: "End agent chat", agentReply: "Agent reply",
+};
+function lastTopic() {
+  const t = [...S.log].reverse().find((l) => l.intent && !["Menu", "Talk to a person", "Not understood", "Start"].includes(l.intent));
+  return t ? t.intent : null;
+}
+function logEvent(text, intent, how, extra = "") { S.log.push({ who: GUEST.first, text, intent, how, extra, time: clock() }); renderConsole(); }
+
+function run(act, args = [], label, how = "tap", matched = "") {
+  if (!A[act]) return;
+  S.misses = 0;
+  if (label !== null) logEvent(label, INTENT_LABEL[act] || act, how, matched);
+  A[act](...args);
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
+  const args = b.dataset.args ? JSON.parse(b.dataset.args) : [];
+  const label = b.dataset.echo ?? b.textContent.trim();
+  const chipRow = b.closest(".chips"); if (chipRow) chipRow.remove();
+  userSay(label);
+  run(b.dataset.act, args, label);
+});
+
+/* =====================================================================
+   Routing: typed messages
+   ===================================================================== */
+const RULES = [
+  ["urgent", /\b(leak(ing)?|flood(ing|ed)?|fire|smoke|gas|locked out|lock(ed)? myself out|can'?t get in|no (heating|hot water|power|electric(ity)?)|heating (is )?(off|broken|not working)|power cut|burst|emergency|broken into|burgl)/i],
+  ["human", /\b(human|real person|a person|someone|agent|speak to|talk to|call me|phone me|staff|manager)\b/i],
+  ["refundStatus", /(REF-?\d{3,})|refund.*(status|where|arriv|update|track|yet)|where.*refund|(status|track).*refund/i],
+  ["cancel", /\bcancel/i],
+  ["change", /\b(change|move|reschedule|amend|swap|different|switch)\b.*\b(date|dates|booking|stay|night|week)|\b(reschedule|postpone)\b|change (my )?dates/i],
+  ["extras", /\b(extras?|add-?ons?|hamper|late check-?out|early check-?in|firewood|logs|cot|high ?chair|bikes?|dog pack)\b/i],
+  ["wifi", /\b(wi-?fi|wifi|internet|broadband|network|router)\b/i],
+  ["checkin", /\b(check-?in|check in|key ?safe|keys?|arriv|address|directions|parking|postcode|code|what time)\b/i],
+  ["pets", /\b(dogs?|pets?|puppy|cats?|pup)\b/i],
+  ["bookings", /\b(my bookings?|bookings|reservations?|my stays?|my trips?|SE-?\d{5})\b/i],
+  ["newStay", /\b(book|availability|available|new stay|holiday|getaway|weekend away|free dates)\b/i],
+  ["cancelOrRefund", /\brefund/i],
+  ["greet", /^\s*(hi|hello|hey|hiya|good (morning|afternoon|evening))\b/i],
+  ["thanks", /\b(thanks|thank you|cheers|ta|great|perfect)\b/i],
+  ["menu", /^\s*(menu|help|options|start|home|back)\s*$/i],
+];
+const FLOORS = [[0, /\b(ground|downstairs|kitchen|living|bottom|garden)\b/i], [1, /\b(first|1st|middle|bedroom ?[12])\b/i], [2, /\b(loft|top|attic|third|3rd|bedroom ?3|reading)\b/i], [-1, /\b(all|every|each)\b/i]];
+const PROP_RX = { rose: /\brose\b/i, birch: /\bbirch(wood)?\b/i, glen: /\bglen\b/i, sea: /\bsea ?view\b/i };
+
+function findProp(t) { return Object.keys(PROP_RX).find((k) => PROP_RX[k].test(t)); }
+function findRef(t) {
+  const m = t.match(/SE-?(\d{5})/i); if (m && byRef(`SE-${m[1]}`)) return `SE-${m[1]}`;
+  const p = findProp(t); if (p) { const b = BOOKINGS.find((x) => x.prop === p && x.status === "upcoming"); if (b) return b.ref; }
+  return null;
+}
+
+function handleTyped(text) {
+  userSay(text);
+  const t = text.trim();
+
+  // A person is in the chat: messages go to them.
+  if (S.agent) {
+    logEvent(t, "To agent", "typed");
+    if (RULES[0][1].test(t) && !S.urgent) { S.urgent = true; renderConsole(); }
+    const who = AGENTS[S.agent];
+    sayAs(who.id, "Thanks, I'm checking that now. One moment.");
+    if (!S.agentAutoNoteShown) { S.agentAutoNoteShown = true; sys("Demo: switch on Agent view to reply as " + who.name); }
+    return;
+  }
+
+  // Urgent always wins, even mid-flow.
+  const urgentHit = t.match(RULES[0][1]);
+  if (urgentHit) {
+    const word = urgentHit[0].toLowerCase();
+    const kind = /leak|flood|burst/.test(word) ? "water leak" : /lock|get in/.test(word) ? "locked out" : /heating|hot water/.test(word) ? "no heating" : word;
+    return run("urgent", [kind], t, "typed", word);
+  }
+
+  // Answers to an open question
+  const aw = S.awaiting;
+  if (aw?.type === "floor") { const f = FLOORS.find(([, rx]) => rx.test(t)); if (f) return run("wifi", [aw.ref, f[0]], t, "typed", t.match(f[1])[0]); }
+  if (aw?.type === "property") { const p = findProp(t); if (p) return run(aw.next, [p], t, "typed", t.match(PROP_RX[p])[0]); }
+  if (aw?.type === "booking") { const r = findRef(t); if (r) return run(aw.next, [r], t, "typed", r); }
+
+  for (const [intent, rx] of RULES.slice(1)) {
+    const m = t.match(rx); if (!m) continue;
+    const word = m[0];
+    const ref = findRef(t), prop = findProp(t);
+    switch (intent) {
+      case "greet": S.misses = 0; logEvent(t, "Greeting", "typed", word); say(`Hi ${GUEST.first}! What can I help with?`); return chips(MENU);
+      case "thanks": S.misses = 0; logEvent(t, "Thanks", "typed", word); say("You're welcome! 😊 Anything else?"); return chips([["Main menu", "menu"]]);
+      case "refundStatus": { const id = (t.match(/REF-?(\d+)/i) || [])[1]; return run("refundStatus", [id ? `REF-${id}` : "REF-2041"], t, "typed", word); }
+      case "wifi": {
+        const f = FLOORS.find(([, rx]) => rx.test(t));
+        return run("wifi", [ref || upcoming()[0]?.ref, f ? f[0] : null], t, "typed", word);
+      }
+      case "pets": return run("pets", [prop || null], t, "typed", word);
+      case "newStay": if (prop) return run("propDates", [prop], t, "typed", word); return run("newStay", [], t, "typed", word);
+      case "bookings": if (ref && /SE-?\d/i.test(t)) { logEvent(t, "My bookings", "typed", word); post(() => carousel([bookingCard(byRef(ref))])); return; }
+        return run("bookings", [], t, "typed", word);
+      case "change": case "cancel": case "extras": case "checkin":
+        return run(intent, [ref], t, "typed", word);
+      default: return run(intent, [], t, "typed", word);
+    }
+  }
+
+  // Property name on its own
+  const p = findProp(t);
+  if (p) { const b = upcoming().find((x) => x.prop === p); S.misses = 0; logEvent(t, "Property", "typed", t.match(PROP_RX[p])[0]);
+    if (b) { say(`Here's your ${PROPS[p].name} booking:`); post(() => carousel([bookingCard(b)])); }
+    else { post(() => carousel([propertyCard(PROPS[p])])); }
+    return;
+  }
+
+  // Not understood
+  S.misses++;
+  logEvent(t, "Not understood", "typed");
+  if (S.misses >= 2) {
+    say("Sorry, I've misunderstood you twice now. Rather than keep guessing, would you like me to bring in a person from our team?");
+    chips([["Yes, get me a person", "human", ["bot couldn't understand"], "person"], ["No, show me the menu", "menu"]]);
+  } else {
+    say("Sorry, I didn't quite catch that. You can tap an option or try different words, e.g. “wifi”, “cancel” or “bring my dog”.");
+    chips(MENU);
+  }
+}
+
+$("#composer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = $("#msg").value.trim(); if (!v) return;
+  $("#msg").value = "";
+  handleTyped(v);
+});
+
+/* =====================================================================
+   Header + Agent view
+   ===================================================================== */
+function setHeader() {
+  const head = $("#chatHead");
+  if (S.agent) {
+    const a = AGENTS[S.agent];
+    head.classList.add("with-agent");
+    $("#headAvatar").textContent = a.initials; $("#headAvatar").style.color = "var(--agent)";
+    $("#headName").textContent = `${a.name} · StayEasy`;
+    $("#headStatus").textContent = a.role;
+    $("#msg").placeholder = `Message ${a.name}…`;
+  } else {
+    head.classList.remove("with-agent");
+    $("#headAvatar").textContent = "SE"; $("#headAvatar").style.color = "";
+    $("#headName").textContent = "StayEasy Helper";
+    $("#headStatus").textContent = "Online · team on hand 24/7";
+    $("#msg").placeholder = "Type a message…";
+  }
+}
+
+const consoleEl = $("#console");
+$("#agentToggle").addEventListener("click", (e) => {
+  const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+  e.currentTarget.setAttribute("aria-pressed", on);
+  consoleEl.hidden = !on;
+  renderConsole();
+});
+
+function suggestedReplies() {
+  const b = S.focusRef ? byRef(S.focusRef) : null;
+  const out = [];
+  if (S.urgent) out.push("I'm calling you now on the number on your booking.", "I'm sending a local engineer. They'll be there within the hour.");
+  if (!S.urgent && b && b.status === "upcoming" && daysUntil(b.start) < POLICY.freeChangeDays) out.push(`I've waived the ${money(POLICY.changeFee)} change fee for ${PROPS[b.prop].name} as a goodwill gesture.`);
+  if (/refund/i.test(S.handoverReason || "") || S.log.some((l) => /Refund/.test(l.intent))) out.push("Your £80 refund (REF-2041) was sent on 2 Feb. If it hasn't arrived by 9 Feb, I'll chase the bank for you.");
+  if (/Seaview|pets/i.test(S.handoverReason || "")) out.push("Seaview is pet-free, but Birchwood Cabin has the same dates free and welcomes dogs. Shall I hold it for you?");
+  out.push("Is there anything else I can help with today?");
+  return [...new Set(out)];
+}
+
+function renderConsole() {
+  if (consoleEl.hidden) return;
+  const b = S.focusRef ? byRef(S.focusRef) : null;
+  const misses = S.log.filter((l) => l.intent === "Not understood").length;
+  const intents = [...new Set(S.log.map((l) => l.intent).filter((i) => i && !["Menu", "Start", "Greeting", "Thanks", "To agent"].includes(i)))];
+  const flags = [
+    S.urgent ? `<span class="flag red">URGENT</span>` : "",
+    S.agent ? `<span class="flag blue">With ${AGENTS[S.agent].name}</span>` : `<span class="flag green">Bot handling</span>`,
+    misses ? `<span class="flag amber">${misses} not understood</span>` : "",
+    S.cart.length ? `<span class="flag amber">Cart ${money(cartTotal())}</span>` : "",
+    `<span class="flag blue">Returning guest since ${GUEST.since}</span>`,
+  ].join("");
+  const summary = S.handoverReason
+    ? `${GUEST.first} was handed over for <b>${esc(S.handoverReason)}</b>. Before that the bot covered: ${intents.length ? intents.map(esc).join(" → ") : "nothing yet"}.`
+    : `No handover yet. The bot is handling this chat. Topics so far: ${intents.length ? intents.map(esc).join(" → ") : "none yet"}.`;
+  const tl = S.log.slice(-14).map((l) => `<li><span class="t">${l.time} · ${esc(l.who)}${l.how ? ` · ${l.how}` : ""}</span>${l.intent ? `<span class="intent ${l.intent === "Not understood" ? "miss" : ""}">${esc(l.intent)}</span>` : ""}${l.extra ? `<span class="t"> matched “${esc(l.extra)}”</span>` : ""}<br>${esc(l.text)}</li>`).join("");
+  consoleEl.innerHTML = `
+    <h2>Agent view · what ${S.agent ? AGENTS[S.agent].name : "the team"} sees</h2>
+    <div class="panel">${flags}<p style="margin:6px 0 0">${summary}</p></div>
+    <h2>Guest</h2>
+    <div class="panel kv"><span>Name</span><span>${GUEST.first} ${GUEST.last}</span><span>Contact</span><span>${GUEST.phone} · ${GUEST.email}</span><span>Bookings</span><span>${BOOKINGS.map((x) => `${x.ref} (${x.status})`).join(", ")}</span></div>
+    ${b ? `<h2>Booking in focus</h2><div class="panel kv"><span>Ref</span><span>${b.ref}</span><span>Property</span><span>${PROPS[b.prop].name}</span><span>Dates</span><span>${fmt(b.start)} → ${fmt(b.end)} (${b.status === "upcoming" ? `in ${daysUntil(b.start)} days` : b.status})</span><span>Policy</span><span>${b.status === "upcoming" ? (daysUntil(b.start) >= POLICY.freeChangeDays ? "Free change · full refund" : `£${POLICY.changeFee} change fee · ${POLICY.lateRefundPct}% refund`) : "n/a"}</span><span>Total</span><span>${money(b.total)}</span></div>` : ""}
+    <h2>Suggested replies</h2>
+    <div class="panel">${S.agent
+      ? suggestedReplies().map((r) => `<button class="reply-btn" data-reply="${esc(r)}">↩ ${esc(r)}</button>`).join("")
+      : `<p style="margin:0">Replies unlock when a person joins the chat.</p><button class="take-over" data-takeover>Take over this chat as Sam</button>`}</div>
+    <h2>Transcript with detected intents</h2>
+    <div class="panel"><ul class="tl">${tl || "<li>Nothing yet.</li>"}</ul></div>`;
+}
+
+consoleEl.addEventListener("click", (e) => {
+  const r = e.target.closest("[data-reply]");
+  if (r && S.agent) { $("#agentToggle").click(); sayAs(S.agent, esc(r.dataset.reply)); return; }
+  if (e.target.closest("[data-takeover]")) { $("#agentToggle").click(); run("human", ["agent took over"], null); }
+});
+
+$("#restart").addEventListener("click", () => location.reload());
+
+/* =====================================================================
+   Notes panel + footer
+   ===================================================================== */
+$("#designer").textContent = CONFIG.designerName;
+$("#linkedin").href = CONFIG.linkedinUrl;
+$("#evidence").innerHTML = CONFIG.evidence.map((e) => `<li class="${/^Evidence line \d/.test(e) ? "placeholder" : ""}">${esc(e)}</li>`).join("");
+const TRIES = ["wifi in the loft", "cancel rose cottage", "where's my refund?", "can I bring my dog to seaview", "change dates for birchwood", "add a hamper", "there's a water leak", "blah blah", "asdfgh"];
+$("#tries").innerHTML = TRIES.map((t) => `<button class="try">${esc(t)}</button>`).join("");
+$("#tries").addEventListener("click", (e) => { const b = e.target.closest(".try"); if (b) { handleTyped(b.textContent); $("#msg").focus(); } });
+
+A.welcome();
+</script>
+</body>
+</html>
