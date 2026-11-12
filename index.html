@@ -567,7 +567,8 @@ function bookingCard(b, mode = "full") {
   let actions = "";
   if (mode === "pick") actions = btn("Choose this stay", PICK.next, [b.ref], "btn", `${p.name} (${b.ref})`);
   else if (b.status === "upcoming") actions =
-    btn("Check-in & Wi-Fi", "checkin", [b.ref], "btn", `Check-in info for ${p.name}`) +
+    btn("Check-in info", "checkin", [b.ref], "btn", `Check-in info for ${p.name}`) +
+    btn("Wi-Fi", "wifi", [b.ref], "btn ghost", `Wi-Fi for ${p.name}`) +
     btn("Add extras", "extras", [b.ref], "btn ghost", `Add extras to ${p.name}`) +
     btn("Change dates", "change", [b.ref], "btn ghost", `Change dates for ${p.name}`) +
     btn("Cancel", "cancel", [b.ref], "btn danger", `Cancel ${p.name}`);
@@ -736,7 +737,7 @@ function pickBooking(next, question, list = upcoming()) {
    Flows
    ===================================================================== */
 const MENU = [
-  ["My bookings", "bookings"], ["Check-in & Wi-Fi", "checkin"], ["Change dates", "change"],
+  ["My bookings", "bookings"], ["Check-in info", "checkin"], ["Wi-Fi", "wifi"], ["Change dates", "change"],
   ["Cancel or refund", "cancelOrRefund"], ["Add extras", "extras"], ["Book a new stay", "newStay"],
   ["Bringing a dog?", "pets"], ["⚠ Urgent problem", "urgent", [], "urgent"], ["Talk to a person", "human", [], "person"],
 ];
@@ -761,7 +762,7 @@ const A = {
     chips([["Main menu", "menu"]]);
   },
 
-  /* ---- Check-in & Wi-Fi ---- */
+  /* ---- Check-in ---- */
   checkin(ref) {
     if (!ref) ref = upcoming()[0]?.ref;
     if (!ref) { say("You don't have an upcoming stay right now."); return chips([["Book a new stay", "newStay"], ["Main menu", "menu"]]); }
@@ -780,29 +781,27 @@ const A = {
       </ul>
       <a class="btn ghost" style="display:block;text-decoration:none" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}" target="_blank" rel="noopener">Open directions ↗</a>
     </div></div>`, { wide: true });
-    if (p.wifi.length > 1) {
-      say(`${p.name} has <b>${p.wifi.length} floors with a router on each</b>. Which floor will you be on? I'll give you the strongest network.`);
-      S.awaiting = { type: "floor", ref };
-      chips([...p.wifi.map((w, i) => [w.floor, "wifi", [ref, i]]), ["All floors", "wifi", [ref, -1]]]);
-    } else {
-      A.wifi(ref, 0, true);
-    }
+    chips([["Wi-Fi details", "wifi", [ref]], ...(upcoming().length > 1 ? [["A different stay", "pickStay", ["checkin"]]] : []), ["Something else", "menu"]]);
   },
 
-  wifi(ref, floor = null, fromCheckin = false) {
+  /* ---- Wi-Fi ---- */
+  wifi(ref, floor = null) {
     if (!ref) ref = upcoming()[0]?.ref;
+    if (!ref) { say("You don't have an upcoming stay, so there's no Wi-Fi to share yet."); return chips([["Book a new stay", "newStay"], ["Main menu", "menu"]]); }
     const b = byRef(ref), p = PROPS[b.prop]; S.focusRef = ref;
     if (floor === null && p.wifi.length > 1) {
       S.awaiting = { type: "floor", ref };
-      say(`${p.name} has a router on each of its ${p.wifi.length} floors. Which floor are you on?`);
+      say(`${p.name} has <b>${p.wifi.length} floors with a router on each</b>. Which floor will you be on? I'll give you the strongest network.`);
       return chips([...p.wifi.map((w, i) => [w.floor, "wifi", [ref, i]]), ["All floors", "wifi", [ref, -1]]]);
     }
     S.awaiting = null;
-    const list = floor === -1 ? p.wifi : [p.wifi[floor]];
+    const list = floor === -1 ? p.wifi : [p.wifi[floor ?? 0]];
     const box = list.map((w) => `<div class="wifi"><b>${w.floor}: ${w.covers}</b>Network: ${w.ssid}<br>Password: ${w.pass} <button class="copy" data-copy="${w.pass}">Copy</button></div>`).join("");
-    say(`<p>📶 Wi-Fi for ${p.name}${fromCheckin ? "" : ` (${b.ref})`}:</p>${box}${list.length === 1 && p.wifi.length > 1 ? `<p class="note">Moving between floors? Your phone may stay on a weaker network. Switch to the one for the floor you're on.</p>` : ""}`);
-    chips([["Something else", "menu"], ["Talk to a person", "human", [], "person"]]);
+    say(`<p>📶 Wi-Fi for ${p.name} (${b.ref}):</p>${box}${list.length === 1 && p.wifi.length > 1 ? `<p class="note">Moving between floors? Your phone may stay on a weaker network. Switch to the one for the floor you're on.</p>` : ""}`);
+    chips([["Check-in info", "checkin", [ref]], ...(upcoming().length > 1 ? [["A different stay", "pickStay", ["wifi"]]] : []), ["Something else", "menu"]]);
   },
+
+  pickStay(next) { pickBooking(next, "Which stay?"); },
 
   /* ---- Change dates ---- */
   change(ref) {
@@ -1067,7 +1066,7 @@ chat.addEventListener("click", (e) => {
    Routing: taps
    ===================================================================== */
 const INTENT_LABEL = {
-  welcome: "Start", menu: "Menu", bookings: "My bookings", checkin: "Check-in info", wifi: "Wi-Fi", change: "Change dates",
+  welcome: "Start", menu: "Menu", bookings: "My bookings", checkin: "Check-in info", wifi: "Wi-Fi", pickStay: "Pick a stay", change: "Change dates",
   changeReview: "Change dates", changeConfirm: "Change dates: confirmed", cancelOrRefund: "Cancel or refund", cancel: "Cancel booking",
   cancelAsk: "Cancel booking", cancelConfirm: "Cancel: confirmed", keep: "Keep booking", refundStatus: "Refund status", extras: "Add extras",
   viewCart: "Cart", checkout: "Checkout", pay: "Payment", newStay: "Book a new stay", newStayList: "Book a new stay", propDates: "Check availability",
