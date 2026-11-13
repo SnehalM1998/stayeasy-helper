@@ -296,7 +296,7 @@
       <button class="toggle" id="agentToggle" aria-pressed="false" title="See what the StayEasy team sees">
         <span>Agent view</span><span class="track" aria-hidden="true"></span>
       </button>
-      <button class="icon-btn" id="restart" title="Restart the demo" aria-label="Restart the demo">↺</button>
+      <button class="icon-btn" id="restart" title="Start over: clears this chat" aria-label="Start over">↺</button>
     </div>
 
     <div class="chat" id="chat" aria-live="polite"></div>
@@ -344,6 +344,7 @@
       <dt>Birchwood Cabin</dt><dd>18–22 Mar, 42 days away, so the date change is free</dd>
       <dt>Refund</dt><dd>REF-2041 (Glen Lodge), payment on its way</dd>
       <dt>Team</dt><dd>Joe (on-call host, urgent) · Sam (bookings)</dd>
+      <dt>Start over</dt><dd>Type “start over” or tap ↺. Nothing is saved, so every visitor starts fresh.</dd>
     </dl>
   </aside>
 </main>
@@ -739,7 +740,7 @@ function pickBooking(next, question, list = upcoming()) {
 const MENU = [
   ["My bookings", "bookings"], ["Check-in info", "checkin"], ["Wi-Fi", "wifi"], ["Change dates", "change"],
   ["Cancel or refund", "cancelOrRefund"], ["Add extras", "extras"], ["Book a new stay", "newStay"],
-  ["Bringing a dog?", "pets"], ["⚠ Urgent problem", "urgent", [], "urgent"], ["Talk to a person", "human", [], "person"],
+  ["Bringing a dog?", "pets"], ["⚠ Urgent problem", "urgent", [], "urgent"], ["Talk to a person", "human", [], "person"], ["↺ Start over", "startOver"],
 ];
 
 /** One line under stay cards instead of a second set of buttons. */
@@ -804,6 +805,13 @@ const A = {
   },
 
   pickStay(next) { pickBooking(next, "Which stay?"); },
+
+  /* ---- Start over ---- */
+  startOver() {
+    say("Start a fresh chat? This clears everything from this conversation: date changes, cancellations, your cart and any chat with our team. All the demo bookings go back to how they started.");
+    chips([["Yes, start over", "startOverConfirm", [], "urgent"], ["No, carry on", "menu"]]);
+  },
+  startOverConfirm() { post(() => { location.reload(); }); },
 
   /* ---- Change dates ---- */
   change(ref) {
@@ -1068,7 +1076,7 @@ chat.addEventListener("click", (e) => {
    Routing: taps
    ===================================================================== */
 const INTENT_LABEL = {
-  welcome: "Start", menu: "Menu", bookings: "My bookings", checkin: "Check-in info", wifi: "Wi-Fi", pickStay: "Pick a stay", change: "Change dates",
+  welcome: "Start", menu: "Menu", startOver: "Start over", startOverConfirm: "Start over: confirmed", bookings: "My bookings", checkin: "Check-in info", wifi: "Wi-Fi", pickStay: "Pick a stay", change: "Change dates",
   changeReview: "Change dates", changeConfirm: "Change dates: confirmed", cancelOrRefund: "Cancel or refund", cancel: "Cancel booking",
   cancelAsk: "Cancel booking", cancelConfirm: "Cancel: confirmed", keep: "Keep booking", refundStatus: "Refund status", extras: "Add extras",
   viewCart: "Cart", checkout: "Checkout", pay: "Payment", newStay: "Book a new stay", newStayList: "Book a new stay", propDates: "Check availability",
@@ -1116,6 +1124,7 @@ const RULES = [
   ["thanks", /\b(thanks|thank you|cheers|ta|great|perfect)\b/i],
   ["menu", /^\s*(menu|help|options|start|home|back)\s*$/i],
 ];
+const RESET_RX = /^\s*(start over|start again|restart|reset|new chat|clear( chat)?|fresh start)\s*[.!]?\s*$/i;
 const FLOORS = [[0, /\b(ground|downstairs|kitchen|living|bottom|garden)\b/i], [1, /\b(first|1st|middle|bedroom ?[12])\b/i], [2, /\b(loft|top|attic|third|3rd|bedroom ?3|reading)\b/i], [-1, /\b(all|every|each)\b/i]];
 const PROP_RX = { rose: /\brose\b/i, birch: /\bbirch(wood)?\b/i, glen: /\bglen\b/i, sea: /\bsea ?view\b/i };
 
@@ -1129,6 +1138,9 @@ function findRef(t) {
 function handleTyped(text) {
   userSay(text);
   const t = text.trim();
+
+  // "start over" works from anywhere, even mid-flow or with a person in the chat.
+  if (RESET_RX.test(t)) return run("startOver", [], t, "typed", t);
 
   // A person is in the chat: messages go to them.
   if (S.agent) {
@@ -1279,7 +1291,7 @@ consoleEl.addEventListener("click", (e) => {
   if (e.target.closest("[data-takeover]")) { $("#agentToggle").click(); run("human", ["agent took over"], null); }
 });
 
-$("#restart").addEventListener("click", () => location.reload());
+$("#restart").addEventListener("click", () => { if (S.log.length === 0) return location.reload(); userSay("Start over"); run("startOver", [], "Start over (↺ button)"); });
 
 /* =====================================================================
    Notes panel + footer
@@ -1287,7 +1299,7 @@ $("#restart").addEventListener("click", () => location.reload());
 $("#designer").textContent = CONFIG.designerName;
 $("#linkedin").href = CONFIG.linkedinUrl;
 $("#evidence").innerHTML = CONFIG.evidence.map((e) => `<li class="${/^Evidence line \d/.test(e) ? "placeholder" : ""}">${esc(e)}</li>`).join("");
-const TRIES = ["wifi in the loft", "cancel rose cottage", "where's my refund?", "can I bring my dog to seaview", "change dates for birchwood", "add a hamper", "there's a water leak", "blah blah", "asdfgh"];
+const TRIES = ["wifi in the loft", "cancel rose cottage", "where's my refund?", "can I bring my dog to seaview", "change dates for birchwood", "add a hamper", "there's a water leak", "blah blah", "asdfgh", "start over"];
 $("#tries").innerHTML = TRIES.map((t) => `<button class="try">${esc(t)}</button>`).join("");
 $("#tries").addEventListener("click", (e) => { const b = e.target.closest(".try"); if (b) { handleTyped(b.textContent); $("#msg").focus(); } });
 
