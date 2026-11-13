@@ -226,6 +226,11 @@
   .urgent-card { background: var(--amber-bg); border: 1.5px solid var(--amber-line); border-left: 6px solid var(--amber); }
   .urgent-card h3 { color: var(--amber); }
   .urgent-card .call { display: block; text-decoration: none; text-align: center; margin-top: 6px; background: var(--amber); color: #fff; font-weight: 700; padding: 8px; border-radius: 10px; }
+  .urgent-card .call small { display: block; font-weight: 400; font-size: 12px; opacity: .85; }
+  .urgent-card.danger { background: #FDECEA; border-color: #F3A8A1; border-left-color: var(--red); }
+  .urgent-card.danger h3 { color: var(--red); }
+  .urgent-card.danger .call { background: var(--red); }
+  .urgent-card.danger .call.alt { background: #fff; color: var(--red); border-color: var(--red); }
   .urgent-card .call.alt { background: #fff; color: var(--amber); border: 1.5px solid var(--amber); }
 
   /* Composer */
@@ -406,6 +411,7 @@ const GUEST = { first: "Priya", last: "Patel", email: "priya.patel@example.com",
 
 const PROPS = {
   rose: {
+    owner: { name: "Margaret", phone: "07700 900241" }, maintenance: { phone: "07700 900685" },
     id: "rose", name: "Rose Cottage", place: "Bourton-on-the-Water, Cotswolds", icon: "🌹",
     bg: "linear-gradient(135deg,#B5476B,#E59AAE)", sleeps: 6, bedrooms: 3, rate: 180, dogs: true,
     address: "Mill Lane, Bourton-on-the-Water, Cotswolds", town: "Bourton-on-the-Water, Gloucestershire, UK", parking: "2 spaces on the gravel drive",
@@ -418,6 +424,7 @@ const PROPS = {
     ],
   },
   birch: {
+    owner: { name: "David", phone: "07700 900352" }, maintenance: { phone: "07700 900796" },
     id: "birch", name: "Birchwood Cabin", place: "Windermere, Lake District", icon: "🌲",
     bg: "linear-gradient(135deg,#2F6B47,#7DB58F)", sleeps: 4, bedrooms: 2, rate: 220, dogs: true,
     address: "Brant Fell Road, Windermere, Lake District", town: "Windermere, Cumbria, UK", parking: "1 space by the cabin",
@@ -426,6 +433,7 @@ const PROPS = {
     wifi: [{ floor: "Whole cabin", covers: "everywhere incl. the hot tub deck", ssid: "Birchwood-Guest", pass: "lakeside2027" }],
   },
   glen: {
+    owner: { name: "Fiona", phone: "07700 900463" }, maintenance: { phone: "07700 900807" },
     id: "glen", name: "Glen Lodge", place: "Aviemore, Scottish Highlands", icon: "🏔️",
     bg: "linear-gradient(135deg,#3D4F7C,#8C9CC8)", sleeps: 8, bedrooms: 4, rate: 260, dogs: true,
     address: "Rothiemurchus, Aviemore, Scottish Highlands", town: "Aviemore, Scotland, UK", parking: "Driveway for 3 cars",
@@ -434,6 +442,7 @@ const PROPS = {
     wifi: [{ floor: "Whole lodge", covers: "all rooms", ssid: "GlenLodge-Guest", pass: "cairngorm88" }],
   },
   sea: {
+    owner: { name: "Tom", phone: "07700 900574" }, maintenance: { phone: "07700 900918" },
     id: "sea", name: "Seaview Lodge", place: "St Ives, Cornwall", icon: "🌊",
     bg: "linear-gradient(135deg,#1F6E8C,#7CC3D6)", sleeps: 4, bedrooms: 2, rate: 195, dogs: false,
     address: "Porthmeor Hill, St Ives, Cornwall", town: "St Ives, Cornwall, UK", parking: "1 permit space",
@@ -481,6 +490,7 @@ let REFUNDS = {
   },
 };
 
+const HOST_LINE = "07700 900111"; // on-call host (fictional number, Ofcom drama range)
 const AGENTS = {
   sam: { id: "sam", name: "Sam", role: "Bookings team", initials: "SA" },
   joe: { id: "joe", name: "Joe", role: "On-call host", initials: "JO" },
@@ -858,6 +868,30 @@ function closingMessage() {
     : `Thanks for chatting, ${GUEST.first}. I'm glad we got that sorted. I'll close this chat now. If you need anything else, StayEasy Helper is here 24/7 and can bring us back any time. – ${a.name}`;
 }
 
+/* Urgent problems: emergencies go to 999; property problems go to the right person. */
+const URGENT = {
+  "locked out": { title: "Locked out", order: ["host", "owner"],
+    tip: "Check you're using the latest key safe code from your arrival message. If it still won't open, call Joe: he can talk you through it or bring a spare key." },
+  "no heating": { title: "No heating or hot water", order: ["maint", "host"],
+    tip: "Try the boiler reset button in the kitchen cupboard (hold it for 5 seconds). If that doesn't work, maintenance can come out." },
+  "water leak": { title: "Water leak", order: ["maint", "host", "owner"],
+    tip: "If you can, turn the water off at the stopcock under the kitchen sink and move valuables away from the water." },
+  "power cut": { title: "Power cut", order: ["maint", "host"],
+    tip: "Check the fuse box in the hall cupboard and flip any switches that are down. If the whole street is dark, it's a network power cut: call 105." },
+  "other urgent": { title: "Something urgent", order: ["host", "owner", "maint"],
+    tip: "Tell Joe what's happening in this chat, or call him straight away." },
+  gas: { title: "Gas smell", danger: true, calls: ["gas", "999"],
+    text: "Don't use light switches or naked flames. Open doors and windows, turn the gas off at the meter if it's safe, and leave the property. Then call the gas emergency line." },
+  fire: { title: "Fire or smoke", danger: true, calls: ["999"], text: "Get everyone out, close doors behind you and call 999. Don't go back inside." },
+  "someone hurt": { title: "Someone is hurt", danger: true, calls: ["999"], text: "If it's serious or life-threatening, call 999 now. For urgent advice that isn't an emergency, call NHS 111." },
+  "break-in": { title: "Break-in", danger: true, calls: ["999"], text: "If someone may still be inside, leave and call 999. Don't touch anything, so the police can investigate." },
+};
+function urgentKind(word) {
+  return /leak|flood|burst/.test(word) ? "water leak" : /lock|get in/.test(word) ? "locked out" : /heating|hot water/.test(word) ? "no heating"
+    : /power|electric/.test(word) ? "power cut" : /gas/.test(word) ? "gas" : /fire|smoke/.test(word) ? "fire"
+    : /hurt|injur|ambulance|bleed|unconscious/.test(word) ? "someone hurt" : /broken into|burgl|break-?in/.test(word) ? "break-in" : null;
+}
+
 /** Cancel a booking and open a refund. Returns the refund id. */
 function cancelWithRefund(ref, amount, approvedNote) {
   const b = byRef(ref), p = PROPS[b.prop];
@@ -1136,25 +1170,33 @@ const A = {
   /* ---- Urgent ---- */
   urgent(kind) {
     S.urgent = true; S.awaiting = null;
-    say(`<div class="card urgent-card"><div class="body">
-      <h3>⚠ Urgent help</h3>
-      <p style="margin:4px 0">If anyone is in danger, <b>call 999 now</b>.<br>If you smell gas, leave the property and call the gas emergency line.</p>
-      <a class="call" href="tel:999">Call 999</a>
-      <a class="call alt" href="tel:08001119999">Gas emergency: 0800 111 999</a>
-      <p class="note" style="color:#7A5A12">For anything else, our on-call host can be with you in minutes, day or night.</p>
-    </div></div>`, { wide: true, delay: 300 });
     if (!kind) {
-      say("What's happening?", { delay: 300 });
+      say(`⚠ <b>Urgent help.</b> What's happening? If anyone is in danger, <a href="tel:999"><b>call 999</b></a> now.`, { delay: 300 });
       return chips([["Locked out", "urgent", ["locked out"], "urgent"], ["No heating or hot water", "urgent", ["no heating"], "urgent"], ["Water leak", "urgent", ["water leak"], "urgent"], ["Something else urgent", "urgent", ["other urgent"], "urgent"]]);
     }
-    const tips = {
-      "locked out": "If the key safe won't open, check you're using the latest code from your arrival message.",
-      "no heating": "The boiler reset button is in the kitchen cupboard. Hold it for 5 seconds.",
-      "water leak": "If you can, turn the water off at the stopcock under the kitchen sink.",
-    };
-    if (tips[kind]) say(`While I connect you: ${tips[kind]}`, { delay: 300 });
-    A.human(`URGENT: ${kind}`, "joe");
+    const k = URGENT[kind] || URGENT["other urgent"];
+    const b = cancelTarget(), p = b ? PROPS[b.prop] : null;
+    let body;
+    if (k.danger) {
+      const calls = k.calls.map((c, i) => c === "999" ? `<a class="call${i ? " alt" : ""}" href="tel:999">Call 999</a>` : `<a class="call${i ? " alt" : ""}" href="tel:08001119999">Gas emergency: 0800 111 999</a>`).join("");
+      body = `<h3>🚨 ${k.title}</h3><p style="margin:4px 0">${k.text}</p>${calls}
+        <p class="note" style="color:#7A5A12">Once you're safe, tell us here. Joe, our on-call host, is joining this chat now.</p>`;
+    } else {
+      const who = {
+        host: { label: "Joe, on-call host", phone: HOST_LINE, why: "24/7, can come out" },
+        maint: p && { label: `Maintenance for ${p.name}`, phone: p.maintenance.phone, why: "repairs, heating, plumbing, power" },
+        owner: p && { label: `${p.owner.name}, the owner`, phone: p.owner.phone, why: "spare keys, property questions" },
+      };
+      const calls = k.order.map((c) => who[c]).filter(Boolean)
+        .map((c, i) => `<a class="call${i ? " alt" : ""}" href="tel:${c.phone.replace(/\s/g, "")}">📞 ${c.label} · ${c.phone}<small>${c.why}</small></a>`).join("");
+      body = `<h3>⚠ ${k.title}${p ? ` at ${p.name}` : ""}</h3><p style="margin:4px 0">${k.tip}</p>
+        <p style="margin:8px 0 2px;font-weight:700">Who to call</p>${calls}
+        <p class="note" style="color:#7A5A12">Joe is also joining this chat now. If anyone is in danger, call 999.</p>`;
+    }
+    say(`<div class="card urgent-card${k.danger ? " danger" : ""}"><div class="body">${body}</div></div>`, { wide: true, delay: 300 });
+    A.human(`URGENT: ${k.title.toLowerCase()}`, "joe");
   },
+
 
   /* ---- Live agent handover ---- */
   human(reason, agentId) {
@@ -1259,7 +1301,7 @@ document.addEventListener("click", (e) => {
    Routing: typed messages
    ===================================================================== */
 const RULES = [
-  ["urgent", /\b(leak(ing)?|flood(ing|ed)?|fire|smoke|gas|locked out|lock(ed)? myself out|can'?t get in|no (heating|hot water|power|electric(ity)?)|heating (is )?(off|broken|not working)|power cut|burst|emergency|broken into|burgl)/i],
+  ["urgent", /\b(leak(ing)?|flood(ing|ed)?|fire|smoke|gas|locked out|lock(ed)? myself out|can'?t get in|no (heating|hot water|power|electric(ity)?)|heating (is )?(off|broken|not working)|power cut|burst|emergency|urgent|broken into|break-?in|burgl|hurt|injur|ambulance|bleeding|unconscious)/i],
   ["human", /\b(human|real person|a person|someone|agent|speak to|talk to|call me|phone me|staff|manager)\b/i],
   ["refundStatus", /(REF-?\d{3,})|refund.*(status|where|arriv|update|track|yet)|where.*refund|(status|track).*refund/i],
   ["cancel", /\bcancel/i],
@@ -1310,7 +1352,7 @@ function handleTyped(text) {
   const urgentHit = t.match(RULES[0][1]);
   if (urgentHit) {
     const word = urgentHit[0].toLowerCase();
-    const kind = /leak|flood|burst/.test(word) ? "water leak" : /lock|get in/.test(word) ? "locked out" : /heating|hot water/.test(word) ? "no heating" : word;
+    const kind = urgentKind(word);
     return run("urgent", [kind], t, "typed", word);
   }
 
