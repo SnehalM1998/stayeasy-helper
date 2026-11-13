@@ -609,6 +609,7 @@ function bookingCard(b, mode = "full") {
         <li><span>Guests</span><span>${b.guests}</span></li>
         <li><span>Total</span><span>${money(b.total)}</span></li>
         ${b.extras.length ? `<li><span>Extras</span><span>${b.extras.join(", ")}</span></li>` : ""}
+        ${b.credit ? `<li><span>Credit</span><span>${money(b.credit)} from ${b.creditBy}</span></li>` : ""}
       </ul>
       <div class="actions">${actions}</div></div></div>`;
 }
@@ -768,6 +769,108 @@ const MENU = [
   ["Bringing a dog?", "pets"], ["⚠ Urgent problem", "urgent", [], "urgent"], ["Talk to a person", "human", [], "person"], ["↺ Start over", "startOver"],
 ];
 
+/* =====================================================================
+   Scripted live-agent conversations (refunds and cancellations)
+   ===================================================================== */
+function pickScript(reason) {
+  if (/refund/i.test(reason) && !/cancel/i.test(reason)) return "refund";
+  if (/cancel/i.test(reason)) { const b = cancelTarget(); return b ? "cancel" : null; }
+  return null;
+}
+function cancelTarget() {
+  if (S.focusRef) { const b = byRef(S.focusRef); return b && b.status === "upcoming" ? b : null; }
+  return upcoming()[0] || null;
+}
+const DONE = ["Thanks, that's all", "endAgent"];
+
+const SCRIPTS = {
+  refund: {
+    start: () => { const r = REFUNDS["REF-2041"]; S.focusRef = r.ref; return {
+      say: [`Hi ${GUEST.first}, Sam here from the Bookings team. I can see your refund <b>${r.id}</b> for ${money(r.amount)} (${r.reason.toLowerCase()}). I'm sorry it's taken a while. What's happening?`],
+      chips: [["It's been a week and nothing's arrived", "agentStep", ["refund", "where"]], ["Why did it take so long?", "agentStep", ["refund", "why"]]] }; },
+    where: () => ({
+      say: [`I've checked with our payments team. The ${money(80)} left us on <b>Tue 2 Feb</b> to your ${GUEST.card}, payment reference <b>SE-PAY-7731</b>.`,
+            `Banks usually take 3–5 working days, so it should show by <b>Tue 9 Feb</b>. Sometimes it appears as a pending credit first.`],
+      chips: [["I need it sooner", "agentStep", ["refund", "sooner"]], ["What if it doesn't arrive?", "agentStep", ["refund", "missing"]], DONE] }),
+    why: () => ({
+      say: [`That's fair to ask. Your request came in on 27 Jan, and Joe checked it with the Glen Lodge owner before approving it on 2 Feb. That review took longer than it should have, and I'm sorry.`],
+      chips: [["Where is it now?", "agentStep", ["refund", "where"]], ["I need it sooner", "agentStep", ["refund", "sooner"]], DONE] }),
+    sooner: () => {
+      const b = byRef("SE-10482"); if (b && b.status === "upcoming" && !b.credit) { b.credit = 20; b.creditBy = "Sam"; }
+      return {
+        say: [`I understand. I can't speed up your bank, but I don't want you out of pocket while you wait.`,
+              `I've added a <b>${money(20)} credit</b> to your Rose Cottage booking (SE-10482) as an apology. It comes off what you owe for any extras.`],
+        card: b && b.status === "upcoming" ? () => carousel([bookingCard(b)]) : null,
+        chips: [["What if it doesn't arrive?", "agentStep", ["refund", "missing"]], ["Thank you, that helps", "agentStep", ["refund", "thanks"]]] }; },
+    missing: () => ({
+      say: [`If it's not there by 9 Feb, just message us. I'll send you the bank trace reference (ARN), and your bank can track it to your account.`,
+            `I've also set myself a reminder to check on <b>Wed 10 Feb</b>, so you won't have to chase us.`],
+      chips: [["Thank you, that helps", "agentStep", ["refund", "thanks"]], ["I need it sooner", "agentStep", ["refund", "sooner"]]] }),
+    thanks: () => ({ say: [`You're welcome, ${GUEST.first}. Anything else I can help with today?`], chips: [DONE] }),
+  },
+
+  cancel: {
+    start: () => { const b = cancelTarget(), p = PROPS[b.prop]; S.focusRef = b.ref;
+      const left = daysUntil(b.start), full = left >= POLICY.freeChangeDays, half = Math.round(b.total * POLICY.lateRefundPct / 100);
+      return full ? {
+        say: [`Hi ${GUEST.first}, Sam here from the Bookings team. I can see you're thinking about cancelling <b>${p.name}</b> (${b.ref}). Good news: it's more than 2 weeks away, so you'd get a full refund of ${money(b.total)}.`],
+        chips: [["Please cancel it for me", "agentStep", ["cancel", "full"]], ["Can I move it instead?", "agentStep", ["cancel", "move"]], ["I'll keep it", "agentStep", ["cancel", "keep"]]] } : {
+        say: [`Hi ${GUEST.first}, Sam here from the Bookings team. I can see you're thinking about cancelling <b>${p.name}</b> (${b.ref}), which starts in ${left} days.`,
+              `Because it's under 2 weeks away, the standard refund is ${POLICY.lateRefundPct}%: ${money(half)} of ${money(b.total)}. Can I ask what's changed?`],
+        chips: [["Something came up, I can't travel then", "agentStep", ["cancel", "why"]], ["Can I get a full refund?", "agentStep", ["cancel", "why"]]] }; },
+    why: () => { const b = cancelTarget(), p = PROPS[b.prop], offer = Math.round(b.total * 0.75);
+      return {
+        say: [`Thanks for explaining, I'm sorry your plans changed. I can't give a full refund this close to arrival, as the owner has already turned other guests away.`,
+              `As you're a returning guest since ${GUEST.since}, I can offer you one of these:<br>• <b>Move your dates for free</b> (I'll waive the ${money(POLICY.changeFee)} fee), or<br>• <b>Cancel with a 75% refund</b>: ${money(offer)} instead of ${money(Math.round(b.total / 2))}.`],
+        chips: [["Move my dates for free", "agentStep", ["cancel", "move"]], [`Cancel with ${money(offer)} back`, "agentStep", ["cancel", "goodwill"]], ["I'll keep my booking", "agentStep", ["cancel", "keep"]]] }; },
+    move: () => { const b = cancelTarget(); b.feeWaivedBy = "Sam";
+      return { say: [`Done. I've waived the change fee on ${b.ref}. I'll pass you back to StayEasy Helper so you can pick new dates. Struck-through dates are already booked.`],
+               then: ["change", b.ref] }; },
+    goodwill: () => { const b = cancelTarget(), p = PROPS[b.prop], offer = Math.round(b.total * 0.75);
+      const id = cancelWithRefund(b.ref, offer, "Approved by Sam (goodwill, 75%)");
+      return { say: [`All done. I've cancelled <b>${p.name}</b> and approved a <b>${money(offer)}</b> refund. Your refund number is <b>${id}</b>. Here's where it's up to:`],
+               card: () => refundCard(id), chips: [["Thank you, that helps", "agentStep", ["cancel", "thanks"]], DONE] }; },
+    full: () => { const b = cancelTarget(), p = PROPS[b.prop];
+      const id = cancelWithRefund(b.ref, b.total, "Full refund, per policy");
+      return { say: [`Done. I've cancelled <b>${p.name}</b> and your full ${money(b.total)} refund is on its way (<b>${id}</b>):`],
+               card: () => refundCard(id), chips: [["Thank you, that helps", "agentStep", ["cancel", "thanks"]], DONE] }; },
+    keep: () => ({ say: [`Great, your booking stays exactly as it is. We look forward to seeing you, ${GUEST.first}!`], chips: [DONE] }),
+    thanks: () => ({ say: [`You're welcome, ${GUEST.first}. Is there anything else I can help with?`], chips: [DONE] }),
+  },
+};
+
+function agentStep(script, step) {
+  const out = SCRIPTS[script][step]();
+  const who = S.agent || "sam";
+  out.say.forEach((m) => sayAs(who, m));
+  if (out.card) post(() => { const c = out.card(); return typeof c === "string" ? rowHTML("agent", "", { wide: true }).replace('</div></div>', c + '</div></div>') : c; });
+  if (out.then) { S.agentChips = null; return A.endAgent(...out.then); }
+  S.agentChips = out.chips;
+  chips(out.chips);
+}
+
+function closingMessage() {
+  const a = AGENTS[S.agent || "sam"];
+  return S.urgent
+    ? `Thanks ${GUEST.first}. I'm glad that's under control. I'll close this chat now, but if anything else happens during your stay, message us and the on-call team will pick it up straight away. – ${a.name}`
+    : `Thanks for chatting, ${GUEST.first}. I'm glad we got that sorted. I'll close this chat now. If you need anything else, StayEasy Helper is here 24/7 and can bring us back any time. – ${a.name}`;
+}
+
+/** Cancel a booking and open a refund. Returns the refund id. */
+function cancelWithRefund(ref, amount, approvedNote) {
+  const b = byRef(ref), p = PROPS[b.prop];
+  b.status = "cancelled";
+  const id = `REF-${S.nextRefund++}`;
+  REFUNDS[id] = { id, ref, reason: `Cancellation of ${p.name}`, amount, steps: [
+    { label: "Cancellation confirmed", date: fmt(TODAY), state: "done" },
+    { label: `Refund approved: ${money(amount)}`, date: approvedNote, state: "done" },
+    { label: `Money back on your ${GUEST.card}`, date: `Expected by ${fmt(addDays(TODAY, 5))}`, state: "current" },
+  ] };
+  renderConsole();
+  return id;
+}
+const refundCard = (id) => { const r = REFUNDS[id]; return `<div class="card"><div class="body"><h3>Refund ${r.id} · ${money(r.amount)}</h3>${steps(r.steps)}</div></div>`; };
+
 /** One line under stay cards instead of a second set of buttons. */
 function moreHint() { say("Need something else, like a new stay, urgent help or a person? Tap <b>☰</b> below or just type."); }
 
@@ -852,11 +955,11 @@ const A = {
     if (!ref) return pickBooking("change", "Which stay would you like to move?");
     const b = byRef(ref), p = PROPS[b.prop]; S.focusRef = ref; S.awaiting = null;
     if (b.status !== "upcoming") { say(`${p.name} (${ref}) can't be changed because it's ${b.status}.`); return chips([["Main menu", "menu"]]); }
-    const left = daysUntil(b.start), free = left >= POLICY.freeChangeDays;
+    const left = daysUntil(b.start), waived = b.feeWaivedBy, free = left >= POLICY.freeChangeDays || !!waived;
     say(`<div class="card policy ${free ? "" : "fee"}"><div class="body">
       <h3>Changing ${p.name}</h3><p class="sub">${fmt(b.start)} → ${fmt(b.end)} · starts in ${left} days</p>
-      <div class="outcome">${free ? "Free to change" : `${money(POLICY.changeFee)} change fee`}</div>
-      <p class="note">${free ? `Your stay is more than 2 weeks away, so moving it is free. You only pay any difference in price.` : `Your stay starts in under 2 weeks, so a ${money(POLICY.changeFee)} fee applies, plus any difference in price.`}</p>
+      <div class="outcome">${waived ? "Change fee waived" : free ? "Free to change" : `${money(POLICY.changeFee)} change fee`}</div>
+      <p class="note">${waived ? `${waived} has waived the ${money(POLICY.changeFee)} fee for you. You only pay any difference in price.` : free ? `Your stay is more than 2 weeks away, so moving it is free. You only pay any difference in price.` : `Your stay starts in under 2 weeks, so a ${money(POLICY.changeFee)} fee applies, plus any difference in price.`}</p>
     </div></div>`, { wide: true });
     say("Pick your new dates. Struck-through nights are already booked.");
     post(() => calendar({
@@ -868,7 +971,7 @@ const A = {
   changeReview(ref, s, e) {
     const b = byRef(ref), p = PROPS[b.prop];
     const n = nightsBetween(s, e), newTotal = n * p.rate, diff = newTotal - b.total;
-    const fee = daysUntil(b.start) >= POLICY.freeChangeDays ? 0 : POLICY.changeFee;
+    const fee = daysUntil(b.start) >= POLICY.freeChangeDays || b.feeWaivedBy ? 0 : POLICY.changeFee;
     const due = diff + fee;
     S.pendingChange = { ref, s, e, newTotal, due };
     say(`<div class="card"><div class="body"><h3>Check your change</h3>
@@ -912,7 +1015,7 @@ const A = {
     if (!full) {
       say(`Changing dates could suit you better: it costs ${money(POLICY.changeFee)} and you keep your full stay.`);
       chips([["Change dates instead", "change", [ref]], ["Cancel anyway", "cancelAsk", [ref], "urgent"], ["Talk to a person", "human", ["cancellation"], "person"], ["Keep my booking", "keep"]]);
-    } else chips([["Cancel booking", "cancelAsk", [ref], "urgent"], ["Change dates instead", "change", [ref]], ["Keep my booking", "keep"]]);
+    } else chips([["Cancel booking", "cancelAsk", [ref], "urgent"], ["Change dates instead", "change", [ref]], ["Talk to a person", "human", ["cancellation"], "person"], ["Keep my booking", "keep"]]);
   },
 
   cancelAsk(ref) {
@@ -922,16 +1025,11 @@ const A = {
   },
 
   cancelConfirm(ref) {
-    const b = byRef(ref), p = PROPS[b.prop], refund = S.pendingCancel.refund;
-    b.status = "cancelled"; S.pendingCancel = null;
-    const id = `REF-${S.nextRefund++}`;
-    REFUNDS[id] = { id, ref, reason: `Cancellation of ${p.name}`, amount: refund, steps: [
-      { label: "Cancellation confirmed", date: fmt(TODAY), state: "done" },
-      { label: `Refund approved: ${money(refund)}`, date: "Automatic, per policy", state: "done" },
-      { label: `Money back on your ${GUEST.card}`, date: `Expected by ${fmt(addDays(TODAY, 5))}`, state: "current" },
-    ] };
+    const p = PROPS[byRef(ref).prop], refund = S.pendingCancel.refund;
+    S.pendingCancel = null;
+    const id = cancelWithRefund(ref, refund, "Automatic, per policy");
     say(`${p.name} is cancelled. Your refund is <b>${id}</b>.`);
-    say(`<div class="card"><div class="body"><h3>Refund ${id} · ${money(refund)}</h3>${steps(REFUNDS[id].steps)}</div></div>`, { wide: true });
+    say(refundCard(id), { wide: true });
     chips([["Book a new stay", "newStay"], ["Main menu", "menu"]]);
   },
 
@@ -1069,6 +1167,8 @@ const A = {
       S.agent = who.id; setHeader(); renderConsole();
       return `<div class="sys-pill agent">${who.name} (${who.role}) joined the chat</div>`;
     }, 1600);
+    const script = urgent ? null : pickScript(S.handoverReason);
+    if (script) { S.script = script; return agentStep(script, "start"); }
     const b = S.focusRef ? byRef(S.focusRef) : null;
     const ctx = b ? ` I can see your ${PROPS[b.prop].name} booking (${b.ref})` : "";
     sayAs(who.id, urgent
@@ -1077,12 +1177,27 @@ const A = {
     chips([["End chat with " + who.name, "endAgent"]]);
   },
 
-  endAgent() {
+  endAgent(next, ...args) {
     if (!S.agent) return A.menu();
     const who = AGENTS[S.agent];
-    sayAs(who.id, `Thanks ${GUEST.first}. I'll hand you back to StayEasy Helper. Message any time if you need us again.`);
+    S.script = null; S.agentChips = null;
+    if (!next) sayAs(who.id, `Thanks ${GUEST.first}. I'll hand you back to StayEasy Helper. Message any time if you need us again.`);
     post(() => { S.agent = null; S.urgent = false; setHeader(); renderConsole(); return `<div class="sys-pill">${who.name} left the chat</div>`; });
+    if (next) return A[next](...args);
     say("I'm back. Anything else?"); chips(MENU);
+  },
+
+  agentStep(script, step) { agentStep(script, step); },
+
+  /** The agent ends the chat (from Agent view) with a closing message. */
+  agentClose(msg) {
+    if (!S.agent) return;
+    const who = AGENTS[S.agent];
+    S.script = null; S.agentChips = null;
+    document.querySelectorAll("#chat .chips").forEach((c) => c.remove());
+    sayAs(who.id, esc(msg));
+    post(() => { S.agent = null; S.urgent = false; setHeader(); renderConsole(); return `<div class="sys-pill">${who.name} ended the chat</div>`; });
+    say("Need anything else? Tap <b>☰</b> below or just type.");
   },
 };
 
@@ -1114,7 +1229,7 @@ const INTENT_LABEL = {
   changeReview: "Change dates", changeConfirm: "Change dates: confirmed", cancelOrRefund: "Cancel or refund", cancel: "Cancel booking",
   cancelAsk: "Cancel booking", cancelConfirm: "Cancel: confirmed", keep: "Keep booking", refundStatus: "Refund status", extras: "Add extras",
   viewCart: "Cart", checkout: "Checkout", pay: "Payment", newStay: "Book a new stay", newStayList: "Book a new stay", propDates: "Check availability",
-  stayAdd: "Add stay to cart", pets: "Pet policy", urgent: "URGENT", human: "Talk to a person", endAgent: "End agent chat", agentReply: "Agent reply",
+  stayAdd: "Add stay to cart", pets: "Pet policy", urgent: "URGENT", human: "Talk to a person", endAgent: "End agent chat", agentStep: "Reply to agent", agentReply: "Agent reply",
 };
 function lastTopic() {
   const t = [...S.log].reverse().find((l) => l.intent && !["Menu", "Talk to a person", "Not understood", "Start"].includes(l.intent));
@@ -1183,6 +1298,7 @@ function handleTyped(text) {
     logEvent(t, "To agent", "typed");
     if (RULES[0][1].test(t) && !S.urgent) { S.urgent = true; renderConsole(); }
     const who = AGENTS[S.agent];
+    if (S.agentChips) { sayAs(who.id, "Thanks for that. To help me sort this quickly, which of these is closest?"); return chips(S.agentChips); }
     sayAs(who.id, "Thanks, I'm checking that now. One moment.");
     if (!S.agentAutoNoteShown) { S.agentAutoNoteShown = true; sys("Demo: switch on Agent view to reply as " + who.name); }
     return;
@@ -1320,6 +1436,12 @@ function renderConsole() {
     <div class="panel">${S.agent
       ? suggestedReplies().map((r) => `<button class="reply-btn" data-reply="${esc(r)}">↩ ${esc(r)}</button>`).join("")
       : `<p style="margin:0">Replies unlock when a person joins the chat.</p><button class="take-over" data-takeover>Take over this chat as Sam</button>`}</div>
+    ${S.agent ? `<h2>End chat</h2>
+    <div class="panel">
+      <label for="closingMsg" style="display:block;margin-bottom:4px;color:var(--muted)">Closing message (you can edit it)</label>
+      <textarea id="closingMsg" rows="4" style="width:100%;font:inherit;padding:8px;border:1px solid #CDD6E4;border-radius:8px;resize:vertical">${esc(closingMessage())}</textarea>
+      <button class="take-over" data-agent-end style="background:var(--red)">Send and end chat</button>
+    </div>` : ""}
     <h2>Transcript with detected intents</h2>
     <div class="panel"><ul class="tl">${tl || "<li>Nothing yet.</li>"}</ul></div>`;
 }
@@ -1327,6 +1449,10 @@ function renderConsole() {
 consoleEl.addEventListener("click", (e) => {
   const r = e.target.closest("[data-reply]");
   if (r && S.agent) { $("#agentToggle").click(); sayAs(S.agent, esc(r.dataset.reply)); return; }
+  if (e.target.closest("[data-agent-end]") && S.agent) {
+    const msg = ($("#closingMsg").value || "").trim() || closingMessage();
+    $("#agentToggle").click(); A.agentClose(msg); return;
+  }
   if (e.target.closest("[data-takeover]")) { $("#agentToggle").click(); run("human", ["agent took over"], null); }
 });
 
