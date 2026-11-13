@@ -81,6 +81,9 @@
   .toggle[aria-pressed="true"] .track::after { transform: translateX(14px); }
   .icon-btn { background: rgba(255,255,255,.15); border: 0; color: #fff; border-radius: 8px; width: 32px; height: 32px; font-size: 16px; }
 
+  .agentbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px; background: var(--agent-light); color: var(--agent); font-size: 13.5px; border-bottom: 1px solid #CDD6E4; }
+  .agentbar[hidden] { display: none; }
+  .agentbar button { border: 0; background: var(--agent); color: #fff; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 14px; }
   .chat { flex: 1; overflow-y: auto; padding: 14px 10px 8px; scroll-behavior: smooth; }
   .day-pill, .sys-pill {
     display: table; margin: 4px auto 12px; padding: 3px 10px; border-radius: 8px;
@@ -302,6 +305,11 @@
       <button class="icon-btn" id="restart" title="Start over: clears this chat" aria-label="Start over">↺</button>
     </div>
 
+    <div class="agentbar" id="agentbar" hidden>
+      <span id="agentbarText">You're chatting with a person from StayEasy</span>
+      <button data-act="endAgent" data-echo="End chat">End chat</button>
+    </div>
+
     <div class="chat" id="chat" aria-live="polite"></div>
 
     <div class="cartbar" id="cartbar" hidden>
@@ -348,6 +356,7 @@
       <dt>Birchwood Cabin</dt><dd>18–22 Mar, 42 days away, so the date change is free</dd>
       <dt>Refund</dt><dd>REF-2041 (Glen Lodge), payment on its way</dd>
       <dt>Team</dt><dd>Joe (on-call host, urgent) · Sam (bookings)</dd>
+      <dt>End agent chat</dt><dd>Tap <b>End chat</b> in the blue bar, or type “end chat” or “bye”.</dd>
       <dt>Start over</dt><dd>Type “start over” or tap ↺. Nothing is saved, so every visitor starts fresh.</dd>
     </dl>
   </aside>
@@ -772,7 +781,15 @@ const A = {
     moreHint();
   },
 
-  menu() { S.awaiting = null; say("Here's what I can help with:"); chips(MENU); },
+  menu() {
+    S.awaiting = null;
+    if (S.agent) {
+      const name = AGENTS[S.agent].name;
+      say(`You're still chatting with ${name}. I can help with these too:`);
+      return chips([[`End chat with ${name}`, "endAgent", [], "person"], ...MENU.filter(([, act]) => act !== "human")]);
+    }
+    say("Here's what I can help with:"); chips(MENU);
+  },
 
   bookings() {
     say(`You have ${upcoming().length} upcoming stay${upcoming().length === 1 ? "" : "s"} and ${BOOKINGS.filter((b) => b.status !== "upcoming").length} other.`);
@@ -1057,7 +1074,7 @@ const A = {
     sayAs(who.id, urgent
       ? `Hi ${GUEST.first}, I'm ${who.name}, the on-call host. I've got your message about <b>${esc(S.handoverReason.replace("URGENT: ", ""))}</b>.${ctx}. I'm on it. Can you tell me exactly what you're seeing?`
       : `Hi ${GUEST.first}, ${who.name} here from the ${who.role}.${ctx ? ctx + " and" : " I can see"} that you were asking about <b>${esc(S.handoverReason)}</b>. How can I help?`);
-    chips([["Back to StayEasy Helper", "endAgent"]]);
+    chips([["End chat with " + who.name, "endAgent"]]);
   },
 
   endAgent() {
@@ -1141,6 +1158,7 @@ const RULES = [
   ["thanks", /\b(thanks|thank you|cheers|ta|great|perfect)\b/i],
   ["menu", /^\s*(menu|help|options|start|home|back)\s*$/i],
 ];
+const END_RX = /^\s*(end( the)? chat|end|close( the)? chat|leave( the)? chat|back to (the )?(bot|helper|stayeasy helper)|(ok(ay)?,? )?(thanks?( you)?,? )?(bye|goodbye)|that'?s all( thanks?)?|done|all done)\s*[.!]*\s*$/i;
 const RESET_RX = /^\s*(start over|start again|restart|reset|new chat|clear( chat)?|fresh start)\s*[.!]?\s*$/i;
 const FLOORS = [[0, /\b(ground|downstairs|kitchen|living|bottom|garden)\b/i], [1, /\b(first|1st|middle|bedroom ?[12])\b/i], [2, /\b(loft|top|attic|third|3rd|bedroom ?3|reading)\b/i], [-1, /\b(all|every|each)\b/i]];
 const PROP_RX = { rose: /\brose\b/i, birch: /\bbirch(wood)?\b/i, glen: /\bglen\b/i, sea: /\bsea ?view\b/i };
@@ -1160,6 +1178,7 @@ function handleTyped(text) {
   if (RESET_RX.test(t)) return run("startOver", [], t, "typed", t);
 
   // A person is in the chat: messages go to them.
+  if (S.agent && END_RX.test(t)) return run("endAgent", [], t, "typed", t);
   if (S.agent) {
     logEvent(t, "To agent", "typed");
     if (RULES[0][1].test(t) && !S.urgent) { S.urgent = true; renderConsole(); }
@@ -1243,8 +1262,11 @@ function setHeader() {
     $("#headAvatar").textContent = a.initials; $("#headAvatar").style.color = "var(--agent)";
     $("#headName").textContent = `${a.name} · StayEasy`;
     $("#headStatus").textContent = a.role;
-    $("#msg").placeholder = `Message ${a.name}…`;
+    $("#msg").placeholder = `Message ${a.name}… (type "end chat" to finish)`;
+    $("#agentbarText").textContent = `You're chatting with ${a.name}, a real person`;
+    $("#agentbar").hidden = false;
   } else {
+    $("#agentbar").hidden = true;
     head.classList.remove("with-agent");
     $("#headAvatar").textContent = "SE"; $("#headAvatar").style.color = "";
     $("#headName").textContent = "StayEasy Helper";
