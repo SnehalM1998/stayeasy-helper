@@ -908,16 +908,17 @@ function cancelWithRefund(ref, amount, approvedNote) {
 const refundCard = (id) => { const r = REFUNDS[id]; return `<div class="card"><div class="body"><h3>Refund ${r.id} · ${money(r.amount)}</h3>${steps(r.steps)}</div></div>`; };
 
 /** One line under stay cards instead of a second set of buttons. */
-function moreHint() { say("Need something else, like a new stay, urgent help or a person? Tap <b>☰</b> below or just type."); }
+function moreHint(delay) { say("Need something else, like a new stay, urgent help or a person? Tap <b>☰</b> below or just type.", { delay }); }
 
 const A = {
   welcome() {
     sys("Today");
-    say(`Hi ${GUEST.first} 👋 I'm <b>StayEasy Helper</b>. I can sort most things in a few taps, and I can bring in a person from our team at any time.`);
+    const STEP = 1000; // 1 second between welcome messages
+    say(`Hi ${GUEST.first} 👋 I'm <b>StayEasy Helper</b>. I can sort most things in a few taps, and I can bring in a person from our team at any time.`, { delay: STEP });
     const next = upcoming()[0];
-    say(`Your next stay is <b>${PROPS[next.prop].name}</b> in ${daysUntil(next.start)} days.`);
-    post(() => carousel([bookingCard(next)]));
-    moreHint();
+    say(`Your next stay is <b>${PROPS[next.prop].name}</b> in ${daysUntil(next.start)} days.`, { delay: STEP });
+    say(carousel([bookingCard(next)]), { delay: STEP });
+    moreHint(STEP);
   },
 
   menu() {
