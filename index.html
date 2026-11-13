@@ -742,6 +742,9 @@ const MENU = [
   ["Bringing a dog?", "pets"], ["⚠ Urgent problem", "urgent", [], "urgent"], ["Talk to a person", "human", [], "person"],
 ];
 
+/** One line under stay cards instead of a second set of buttons. */
+function moreHint() { say("Need something else, like a new stay, urgent help or a person? Tap <b>☰</b> below or just type."); }
+
 const A = {
   welcome() {
     sys("Today");
@@ -749,7 +752,7 @@ const A = {
     const next = upcoming()[0];
     say(`Your next stay is <b>${PROPS[next.prop].name}</b> in ${daysUntil(next.start)} days.`);
     post(() => carousel([bookingCard(next)]));
-    say("Need something else, like a new stay, urgent help or a person? Tap <b>☰</b> below or just type.");
+    moreHint();
   },
 
   menu() { S.awaiting = null; say("Here's what I can help with:"); chips(MENU); },
@@ -758,7 +761,7 @@ const A = {
     say(`You have ${upcoming().length} upcoming stay${upcoming().length === 1 ? "" : "s"} and ${BOOKINGS.filter((b) => b.status !== "upcoming").length} other.`);
     const order = [...upcoming(), ...BOOKINGS.filter((b) => b.status !== "upcoming")];
     post(() => carousel(order.map((b) => bookingCard(b))));
-    chips([["Main menu", "menu"]]);
+    moreHint();
   },
 
   /* ---- Check-in ---- */
@@ -843,7 +846,7 @@ const A = {
     Object.assign(b, { start: c.s, end: c.e, total: c.newTotal }); S.pendingChange = null;
     say(`Done ✅ ${PROPS[b.prop].name} is now <b>${fmt(c.s)} → ${fmt(c.e)}</b>. ${c.due > 0 ? `${money(c.due)} was charged to your ${GUEST.card}.` : c.due < 0 ? `${money(-c.due)} is on its way back to your ${GUEST.card}.` : "Nothing more to pay."} A confirmation is in your inbox.`);
     post(() => carousel([bookingCard(b)]));
-    chips([["Add extras", "extras", [b.ref]], ["Main menu", "menu"]]);
+    moreHint();
   },
 
   /* ---- Cancel & refunds ---- */
@@ -984,7 +987,7 @@ const A = {
     } else {
       say(`Sorry, <b>${p.name}</b> isn't dog-friendly. We keep it pet-free for guests with allergies, so we can't make exceptions. These places welcome dogs:`);
       post(() => carousel(Object.values(PROPS).filter((x) => x.dogs).map((x) => propertyCard(x))));
-      chips([["Talk to a person", "human", ["pets at Seaview"], "person"], ["Main menu", "menu"]]);
+      moreHint();
     }
   },
 
