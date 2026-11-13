@@ -749,8 +749,7 @@ const A = {
     const next = upcoming()[0];
     say(`Your next stay is <b>${PROPS[next.prop].name}</b> in ${daysUntil(next.start)} days.`);
     post(() => carousel([bookingCard(next)]));
-    say("What can I help with?");
-    chips(MENU);
+    say("Need something else, like a new stay, urgent help or a person? Tap <b>☰</b> below or just type.");
   },
 
   menu() { S.awaiting = null; say("Here's what I can help with:"); chips(MENU); },
