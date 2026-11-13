@@ -397,7 +397,7 @@ const PROPS = {
   rose: {
     id: "rose", name: "Rose Cottage", place: "Bourton-on-the-Water, Cotswolds", icon: "🌹",
     bg: "linear-gradient(135deg,#B5476B,#E59AAE)", sleeps: 6, bedrooms: 3, rate: 180, dogs: true,
-    address: "2 Mill Lane, Bourton-on-the-Water, GL54 2BY", parking: "2 spaces on the gravel drive",
+    address: "Mill Lane, Bourton-on-the-Water, Cotswolds", town: "Bourton-on-the-Water, Gloucestershire, UK", parking: "2 spaces on the gravel drive",
     keySafe: "4721", keySafeWhere: "left of the green front door",
     features: ["3 floors", "Log burner", "Garden"],
     wifi: [
@@ -409,7 +409,7 @@ const PROPS = {
   birch: {
     id: "birch", name: "Birchwood Cabin", place: "Windermere, Lake District", icon: "🌲",
     bg: "linear-gradient(135deg,#2F6B47,#7DB58F)", sleeps: 4, bedrooms: 2, rate: 220, dogs: true,
-    address: "Birchwood, Brant Fell Road, Windermere, LA23 3AE", parking: "1 space by the cabin",
+    address: "Brant Fell Road, Windermere, Lake District", town: "Windermere, Cumbria, UK", parking: "1 space by the cabin",
     keySafe: "9053", keySafeWhere: "on the porch post",
     features: ["Hot tub", "Lake views", "Woodland"],
     wifi: [{ floor: "Whole cabin", covers: "everywhere incl. the hot tub deck", ssid: "Birchwood-Guest", pass: "lakeside2027" }],
@@ -417,7 +417,7 @@ const PROPS = {
   glen: {
     id: "glen", name: "Glen Lodge", place: "Aviemore, Scottish Highlands", icon: "🏔️",
     bg: "linear-gradient(135deg,#3D4F7C,#8C9CC8)", sleeps: 8, bedrooms: 4, rate: 260, dogs: true,
-    address: "Glen Lodge, Rothiemurchus, Aviemore, PH22 1QH", parking: "Driveway for 3 cars",
+    address: "Rothiemurchus, Aviemore, Scottish Highlands", town: "Aviemore, Scotland, UK", parking: "Driveway for 3 cars",
     keySafe: "3318", keySafeWhere: "beside the boot room door",
     features: ["Sauna", "Mountain views", "Boot room"],
     wifi: [{ floor: "Whole lodge", covers: "all rooms", ssid: "GlenLodge-Guest", pass: "cairngorm88" }],
@@ -425,7 +425,7 @@ const PROPS = {
   sea: {
     id: "sea", name: "Seaview Lodge", place: "St Ives, Cornwall", icon: "🌊",
     bg: "linear-gradient(135deg,#1F6E8C,#7CC3D6)", sleeps: 4, bedrooms: 2, rate: 195, dogs: false,
-    address: "Seaview Lodge, Porthmeor Hill, St Ives, TR26 1PT", parking: "1 permit space",
+    address: "Porthmeor Hill, St Ives, Cornwall", town: "St Ives, Cornwall, UK", parking: "1 permit space",
     keySafe: "6640", keySafeWhere: "inside the side gate",
     features: ["Sea views", "Pet-free (allergy-friendly)", "5 min to beach"],
     wifi: [{ floor: "Whole lodge", covers: "all rooms and the balcony", ssid: "Seaview-Guest", pass: "porthmeor21" }],
@@ -798,7 +798,8 @@ const A = {
         <li><span>Parking</span><span>${p.parking}</span></li>
         <li><span>Key safe code</span><span>${key}</span></li>
       </ul>
-      <a class="btn ghost" style="display:block;text-decoration:none" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}" target="_blank" rel="noopener">Open directions ↗</a>
+      <a class="btn ghost" style="display:block;text-decoration:none" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.town)}" target="_blank" rel="noopener">Directions to ${p.town.split(",")[0]} ↗</a>
+      <p class="note">${p.name} is a demo property, so directions go to ${p.town.split(",")[0]}. A real booking would link to the exact address.</p>
     </div></div>`, { wide: true });
     chips([["Wi-Fi details", "wifi", [ref]], ...(upcoming().length > 1 ? [["A different stay", "pickStay", ["checkin"]]] : []), ["Something else", "menu"]]);
   },
