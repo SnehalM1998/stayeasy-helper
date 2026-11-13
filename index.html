@@ -256,6 +256,8 @@
   .tl .miss { color: var(--red); background: #FCE8E6; }
   .reply-btn { display: block; width: 100%; text-align: left; border: 1px solid #CDD6E4; background: #fff; color: var(--agent); border-radius: 10px; padding: 8px 10px; margin-top: 6px; font-size: 13.5px; }
   .reply-btn:hover { background: var(--agent-light); }
+  .reply-tag { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 2px; }
+  .reply-tag.act { color: var(--green-dark); }
   .take-over { width: 100%; border: 0; background: var(--agent); color: #fff; padding: 9px; border-radius: 10px; font-weight: 700; margin-top: 8px; }
 
   /* Notes panel */
@@ -1399,16 +1401,55 @@ $("#agentToggle").addEventListener("click", (e) => {
   renderConsole();
 });
 
+/** Agent view replies. Each is { text, tag?, act? }: act runs when the agent sends it. */
 function suggestedReplies() {
   const b = S.focusRef ? byRef(S.focusRef) : null;
   const out = [];
-  if (S.urgent) out.push("I'm calling you now on the number on your booking.", "I'm sending a local engineer. They'll be there within the hour.");
-  if (!S.urgent && b && b.status === "upcoming" && daysUntil(b.start) < POLICY.freeChangeDays) out.push(`I've waived the ${money(POLICY.changeFee)} change fee for ${PROPS[b.prop].name} as a goodwill gesture.`);
-  if (/refund/i.test(S.handoverReason || "") || S.log.some((l) => /Refund/.test(l.intent))) out.push("Your £80 refund (REF-2041) was sent on 2 Feb. If it hasn't arrived by 9 Feb, I'll chase the bank for you.");
-  if (/Seaview|pets/i.test(S.handoverReason || "")) out.push("Seaview is pet-free, but Birchwood Cabin has the same dates free and welcomes dogs. Shall I hold it for you?");
-  out.push("Is there anything else I can help with today?");
-  return [...new Set(out)];
+  const reason = S.handoverReason || "";
+  if (S.urgent) out.push({ text: "I'm calling you now on the number on your booking." }, { text: "I'm sending a local engineer. They'll be there within the hour." });
+
+  // Cancellation: full refund options
+  const c = !S.urgent && (S.script === "cancel" || /cancel/i.test(reason)) ? cancelTarget() : null;
+  if (c) {
+    const p = PROPS[c.prop], late = daysUntil(c.start) < POLICY.freeChangeDays, half = Math.round(c.total * POLICY.lateRefundPct / 100), part = Math.round(c.total * 0.75);
+    out.push({ tag: "Empathise", text: `I'm sorry your plans have changed, ${GUEST.first}. Can I ask what's happened? It helps me see what I can do for you.` });
+    if (late) {
+      out.push({ tag: "Explain policy", text: `Because ${p.name} is less than 2 weeks away, our policy gives a ${POLICY.lateRefundPct}% refund (${money(half)}), as the owner has already turned other guests away for those dates.` });
+      out.push({ tag: "Approve full refund", act: "fullRefund", text: `As you're a returning guest, I've made an exception and approved a full refund of ${money(c.total)}. I've cancelled ${p.name} for you.` });
+      out.push({ tag: "Offer alternatives", act: "offerOptions", text: `I can't give a full refund this close to arrival, but I can move your dates for free or cancel with a 75% refund (${money(part)}). Which would you prefer?` });
+      out.push({ tag: "Offer credit", text: `If you'd rather, I can cancel with the ${money(half)} refund and add ${money(c.total - half)} credit towards any stay in the next 12 months, so you don't lose anything.` });
+    } else {
+      out.push({ tag: "Approve full refund", act: "fullRefund", text: `Good news: ${p.name} is more than 2 weeks away, so you get a full refund of ${money(c.total)}. I've cancelled it and the money is on its way.` });
+      out.push({ tag: "Offer to move", text: `Before I cancel, would moving your dates help? Changes are free this far ahead.` });
+    }
+  }
+  // After a cancellation: confirm the refund
+  const lastRefund = Object.values(REFUNDS).filter((r) => r.id !== "REF-2041").pop();
+  if (lastRefund) out.push({ tag: "Confirm refund", text: `Your refund ${lastRefund.id} for ${money(lastRefund.amount)} is approved. It should reach your ${GUEST.card} by ${fmt(addDays(TODAY, 5))}, and you'll get an email confirmation.` });
+
+  if (!S.urgent && !c && b && b.status === "upcoming" && daysUntil(b.start) < POLICY.freeChangeDays && !b.feeWaivedBy)
+    out.push({ tag: "Waive fee", act: "waiveFee", text: `I've waived the ${money(POLICY.changeFee)} change fee for ${PROPS[b.prop].name} as a goodwill gesture.` });
+  if (/refund/i.test(reason) && !c) out.push({ text: "Your £80 refund (REF-2041) was sent on 2 Feb. If it hasn't arrived by 9 Feb, I'll chase the bank for you." });
+  if (/Seaview|pets/i.test(reason)) out.push({ text: "Seaview is pet-free, but Birchwood Cabin has the same dates free and welcomes dogs. Shall I hold it for you?" });
+  out.push({ text: "Is there anything else I can help with today?" });
+  const seen = new Set(); return out.filter((r) => !seen.has(r.text) && seen.add(r.text));
 }
+
+/** What an action reply does in the guest's chat after the agent's message. */
+const REPLY_ACTIONS = {
+  fullRefund() {
+    const c = cancelTarget(); if (!c) return;
+    const id = cancelWithRefund(c.ref, c.total, `Full refund approved by ${AGENTS[S.agent].name}`);
+    post(() => rowHTML("agent", "", { wide: true }).replace("</div></div>", refundCard(id) + "</div></div>"));
+    S.agentChips = [["Thank you so much", "agentStep", ["cancel", "thanks"]], DONE]; chips(S.agentChips);
+  },
+  offerOptions() {
+    const c = cancelTarget(); if (!c) return;
+    S.agentChips = [["Move my dates for free", "agentStep", ["cancel", "move"]], [`Cancel with ${money(Math.round(c.total * 0.75))} back`, "agentStep", ["cancel", "goodwill"]], ["I'll keep my booking", "agentStep", ["cancel", "keep"]]];
+    chips(S.agentChips);
+  },
+  waiveFee() { const b = S.focusRef && byRef(S.focusRef); if (b) b.feeWaivedBy = AGENTS[S.agent].name; },
+};
 
 function renderConsole() {
   if (consoleEl.hidden) return;
@@ -1434,7 +1475,7 @@ function renderConsole() {
     ${b ? `<h2>Booking in focus</h2><div class="panel kv"><span>Ref</span><span>${b.ref}</span><span>Property</span><span>${PROPS[b.prop].name}</span><span>Dates</span><span>${fmt(b.start)} → ${fmt(b.end)} (${b.status === "upcoming" ? `in ${daysUntil(b.start)} days` : b.status})</span><span>Policy</span><span>${b.status === "upcoming" ? (daysUntil(b.start) >= POLICY.freeChangeDays ? "Free change · full refund" : `£${POLICY.changeFee} change fee · ${POLICY.lateRefundPct}% refund`) : "n/a"}</span><span>Total</span><span>${money(b.total)}</span></div>` : ""}
     <h2>Suggested replies</h2>
     <div class="panel">${S.agent
-      ? suggestedReplies().map((r) => `<button class="reply-btn" data-reply="${esc(r)}">↩ ${esc(r)}</button>`).join("")
+      ? suggestedReplies().map((r, i) => `<button class="reply-btn" data-reply-i="${i}">${r.tag ? `<b class="reply-tag${r.act ? " act" : ""}">${esc(r.tag)}${r.act ? " · does it" : ""}</b>` : ""}↩ ${esc(r.text)}</button>`).join("")
       : `<p style="margin:0">Replies unlock when a person joins the chat.</p><button class="take-over" data-takeover>Take over this chat as Sam</button>`}</div>
     ${S.agent ? `<h2>End chat</h2>
     <div class="panel">
@@ -1447,8 +1488,15 @@ function renderConsole() {
 }
 
 consoleEl.addEventListener("click", (e) => {
-  const r = e.target.closest("[data-reply]");
-  if (r && S.agent) { $("#agentToggle").click(); sayAs(S.agent, esc(r.dataset.reply)); return; }
+  const r = e.target.closest("[data-reply-i]");
+  if (r && S.agent) {
+    const reply = suggestedReplies()[Number(r.dataset.replyI)];
+    $("#agentToggle").click();
+    document.querySelectorAll("#chat .chips").forEach((c) => c.remove());
+    sayAs(S.agent, esc(reply.text));
+    if (reply.act) REPLY_ACTIONS[reply.act]();
+    return;
+  }
   if (e.target.closest("[data-agent-end]") && S.agent) {
     const msg = ($("#closingMsg").value || "").trim() || closingMessage();
     $("#agentToggle").click(); A.agentClose(msg); return;
