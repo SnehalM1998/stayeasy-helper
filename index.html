@@ -262,6 +262,9 @@
   .notes .lede { color: var(--muted); margin: 0; }
   .evidence { list-style: none; margin: 0; padding: 0; }
   .evidence li { padding: 9px 12px; background: var(--green-light); border-radius: 10px; margin-bottom: 6px; border-left: 4px solid var(--green); }
+  .evidence .ev-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--green-dark); margin-bottom: 2px; }
+  .evidence .src { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .evidence .src a { color: var(--green-dark); }
   .evidence li.placeholder { background: #FFF8E8; border-left-color: var(--amber-line); color: #7A5A12; }
   .decisions { margin: 0; padding-left: 18px; }
   .decisions li { margin-bottom: 6px; }
@@ -363,11 +366,17 @@
 const CONFIG = {
   designerName: "Your Name",                                  // TODO: your name
   linkedinUrl: "https://www.linkedin.com/in/your-profile/",   // TODO: your LinkedIn URL
-  evidence: [                                                 // TODO: your four evidence lines
-    "Evidence line 1: replace with your research finding",
-    "Evidence line 2: replace with your research finding",
-    "Evidence line 3: replace with your research finding",
-    "Evidence line 4: replace with your research finding",
+  evidence: [  // { label, text, source?, url? }
+    { label: "Industry data",
+      text: "Travellers value fast, reachable support but rarely get it: 33% rate easily contactable, responsive customer support as highly important, yet only 24% rated their latest provider's support as excellent.",
+      source: "Expedia Partner Solutions, Traveler Expectations report",
+      url: "https://expediapartnersolutions.com/resources/blog/industry/what-travelers-want-four-key-findings-from-our-global-traveler-expectations-report" },
+    { label: "AI in travel",
+      text: "From my work on MMT's AI customer service: since 2024, using support data to automate recurring issues and queries improved customer service and satisfaction rates." },
+    { label: "Guest feedback",
+      text: "Guest reviews and feedback across booking platforms keep raising the same questions: check-in, Wi-Fi, changing dates, refunds and pets. These became the assistant's core flows." },
+    { label: "My experience",
+      text: "I have built automated conversational bots serving customers at scale in travel and booking. Holiday lets share the same journeys: booking, changes, refunds and help during the stay." },
   ],
 };
 
@@ -1298,7 +1307,11 @@ $("#restart").addEventListener("click", () => { if (S.log.length === 0) return l
    ===================================================================== */
 $("#designer").textContent = CONFIG.designerName;
 $("#linkedin").href = CONFIG.linkedinUrl;
-$("#evidence").innerHTML = CONFIG.evidence.map((e) => `<li class="${/^Evidence line \d/.test(e) ? "placeholder" : ""}">${esc(e)}</li>`).join("");
+$("#evidence").innerHTML = CONFIG.evidence.map((e) => {
+  const x = typeof e === "string" ? { text: e } : e;
+  const src = x.source ? `<small class="src">Source: ${x.url ? `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.source)}</a>` : esc(x.source)}</small>` : "";
+  return `<li class="${/^Evidence line \d/.test(x.text) ? "placeholder" : ""}">${x.label ? `<b class="ev-label">${esc(x.label)}</b>` : ""}${esc(x.text)}${src}</li>`;
+}).join("");
 const TRIES = ["wifi in the loft", "cancel rose cottage", "where's my refund?", "can I bring my dog to seaview", "change dates for birchwood", "add a hamper", "there's a water leak", "blah blah", "asdfgh", "start over"];
 $("#tries").innerHTML = TRIES.map((t) => `<button class="try">${esc(t)}</button>`).join("");
 $("#tries").addEventListener("click", (e) => { const b = e.target.closest(".try"); if (b) { handleTyped(b.textContent); $("#msg").focus(); } });
