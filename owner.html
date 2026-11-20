@@ -1,0 +1,1360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StayEasy Owner Helper</title>
+<meta name="description" content="StayEasy Owner Helper: a property-owner assistant prototype for holiday lets: payouts, bookings, blocking dates, pricing tips, issue tracking and account-manager handover." />
+<style>
+  :root {
+    --green: #1A6B3A;
+    --green-dark: #144F2B;
+    --green-light: #E7F1EC;
+    --green-bubble: #D8EFDF;
+    --chat-bg: #EAF1EC;
+    --page-bg: #F4F6F7;
+    --card: #FFFFFF;
+    --ink: #1D2A22;
+    --muted: #5E6B63;
+    --line: #D6DFD9;
+    --navy: #1A3A6B;
+    --amber: #B45309;
+    --amber-bg: #FFF4DE;
+    --amber-line: #F2C46B;
+    --red: #B42318;
+    --agent: #1A3A6B;
+    --agent-light: #E8ECF3;
+    --radius: 14px;
+    --shadow: 0 1px 2px rgba(16, 40, 24, .08), 0 4px 14px rgba(16, 40, 24, .06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--page-bg);
+    color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  button { font: inherit; cursor: pointer; }
+  button:disabled { cursor: default; }
+  :focus-visible { outline: 3px solid #7FB896; outline-offset: 2px; }
+
+  /* ---------- Page frame ---------- */
+  .topbar {
+    max-width: 1180px; margin: 0 auto; padding: 22px 16px 10px;
+    display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px;
+  }
+  .topbar h1 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+  .topbar h1 span { color: var(--green); }
+  .topbar p { margin: 0; color: var(--muted); font-size: 14px; }
+  .layout {
+    max-width: 1180px; margin: 0 auto; padding: 8px 16px 24px;
+    display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 24px; align-items: start;
+  }
+  @media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- Phone / chat ---------- */
+  .phone {
+    position: relative; height: min(820px, calc(100vh - 110px)); min-height: 560px;
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--chat-bg); border-radius: 22px; box-shadow: 0 10px 40px rgba(16, 40, 24, .16);
+    border: 1px solid #C9D6CE;
+  }
+  @media (max-width: 860px) { .phone { height: 78vh; } }
+  .chat-head {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: var(--green); color: #fff; flex: none;
+  }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%; flex: none;
+    display: grid; place-items: center; font-weight: 700; font-size: 14px;
+    background: #fff; color: var(--green);
+  }
+  .chat-head .who { flex: 1; min-width: 0; }
+  .chat-head .who b { display: block; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-head .who small { opacity: .85; font-size: 12px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-head .who small::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #7CE0A0; margin-right: 5px; vertical-align: 1px; }
+  .chat-head.with-agent { background: var(--agent); }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #fff; background: none; border: 0; padding: 4px; }
+  .toggle .track { width: 34px; height: 20px; border-radius: 10px; background: rgba(255,255,255,.35); position: relative; transition: background .2s; }
+  .toggle .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  .toggle[aria-pressed="true"] .track { background: #7CE0A0; }
+  .toggle[aria-pressed="true"] .track::after { transform: translateX(14px); }
+  .icon-btn { background: rgba(255,255,255,.15); border: 0; color: #fff; border-radius: 8px; width: 32px; height: 32px; font-size: 16px; }
+
+  .agentbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px; background: var(--agent-light); color: var(--agent); font-size: 13.5px; border-bottom: 1px solid #CDD6E4; }
+  .agentbar[hidden] { display: none; }
+  .agentbar button { border: 0; background: var(--agent); color: #fff; font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 14px; }
+  .chat { flex: 1; overflow-y: auto; padding: 14px 10px 8px; scroll-behavior: smooth; }
+  .day-pill, .sys-pill {
+    display: table; margin: 4px auto 12px; padding: 3px 10px; border-radius: 8px;
+    background: #DCE7E0; color: #3F5247; font-size: 12px;
+  }
+  .sys-pill.agent { background: var(--agent-light); color: var(--agent); font-weight: 600; }
+  .row { display: flex; margin: 0 0 8px; }
+  .row.user { justify-content: flex-end; }
+  .bubble {
+    max-width: 86%; padding: 8px 11px; border-radius: 12px; background: var(--card);
+    box-shadow: 0 1px 1px rgba(0,0,0,.06); overflow-wrap: anywhere;
+  }
+  .row.bot .bubble { border-top-left-radius: 4px; }
+  .row.user .bubble { background: var(--green-bubble); border-top-right-radius: 4px; }
+  .row.agent .bubble { border-top-left-radius: 4px; border-left: 3px solid var(--agent); }
+  .bubble .from { display: block; font-size: 12px; font-weight: 700; color: var(--agent); margin-bottom: 2px; }
+  .bubble.wide { max-width: 100%; width: 100%; padding: 0; background: none; box-shadow: none; }
+  .bubble p { margin: 0 0 6px; } .bubble p:last-child { margin: 0; }
+  .meta { display: block; text-align: right; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .typing { display: inline-flex; gap: 4px; padding: 12px 14px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: #9AAFA2; animation: blink 1.1s infinite; }
+  .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+  /* Quick replies */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 12px; padding-left: 2px; }
+  .chip {
+    border: 1.5px solid var(--green); color: var(--green); background: #fff;
+    padding: 6px 12px; border-radius: 18px; font-size: 14px; font-weight: 600;
+  }
+  .chip:hover { background: var(--green-light); }
+  .chip.urgent { border-color: var(--amber); color: var(--amber); }
+  .chip.person { border-color: var(--agent); color: var(--agent); }
+
+  /* Cards */
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .card .hero { height: 86px; display: flex; align-items: flex-end; justify-content: space-between; padding: 8px 10px; color: #fff; font-size: 30px; }
+  .card .hero .tag { font-size: 11px; font-weight: 700; background: rgba(0,0,0,.35); padding: 2px 7px; border-radius: 6px; letter-spacing: .02em; }
+  .card .body { padding: 10px 12px 12px; }
+  .card h3 { margin: 0 0 2px; font-size: 16px; }
+  .card .sub { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
+  .card .facts { list-style: none; margin: 6px 0 8px; padding: 0; font-size: 13.5px; }
+  .card .facts li { padding: 3px 0; border-bottom: 1px dashed var(--line); display: flex; justify-content: space-between; gap: 10px; }
+  .card .facts li:last-child { border-bottom: 0; }
+  .card .facts li span:first-child { color: var(--muted); }
+  .card .actions { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .btn {
+    border: 0; background: var(--green); color: #fff; font-weight: 600; font-size: 14px;
+    padding: 8px 12px; border-radius: 10px; text-align: center;
+  }
+  .btn:hover { background: var(--green-dark); }
+  .btn.ghost { background: var(--green-light); color: var(--green-dark); }
+  .btn.ghost:hover { background: #D5E8DD; }
+  .btn.danger { background: #FCE8E6; color: var(--red); }
+  .btn.added { background: #fff; color: var(--green); border: 1.5px solid var(--green); }
+  .btn:disabled { background: #E3E8E5; color: #8A968F; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; letter-spacing: .02em; }
+  .pill.up { background: var(--green-light); color: var(--green-dark); }
+  .pill.past { background: #EEF0EF; color: var(--muted); }
+  .pill.cancel { background: #FCE8E6; color: var(--red); }
+  .pill.no { background: #FCE8E6; color: var(--red); }
+  .note { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+  .policy { border-left: 4px solid var(--green); }
+  .policy.fee { border-left-color: var(--amber); }
+  .policy .outcome { font-size: 20px; font-weight: 800; margin: 4px 0; }
+  .policy.fee .outcome { color: var(--amber); }
+  .policy:not(.fee) .outcome { color: var(--green); }
+  .wifi { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--green-light); border-radius: 8px; padding: 7px 9px; margin: 6px 0; font-size: 13px; }
+  .wifi b { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: block; font-size: 12px; color: var(--green-dark); }
+  .copy { border: 0; background: none; color: var(--green); font-weight: 700; font-size: 12px; padding: 0 0 0 6px; }
+
+  /* Carousel */
+  .carousel-wrap { position: relative; }
+  .carousel {
+    display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 10px;
+    scrollbar-width: thin;
+  }
+  .carousel > .card { flex: 0 0 78%; scroll-snap-align: start; display: flex; flex-direction: column; }
+  .carousel > .card .body { flex: 1; display: flex; flex-direction: column; }
+  .carousel > .card .actions { margin-top: auto; padding-top: 8px; }
+  .car-nav { position: absolute; top: 34px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(255,255,255,.95); box-shadow: var(--shadow); color: var(--green); font-weight: 800; }
+  .car-nav.prev { left: -4px; } .car-nav.next { right: -4px; }
+  .car-hint { font-size: 12px; color: var(--muted); margin: -4px 0 0 4px; }
+
+  /* Calendar */
+  .cal { padding: 10px 12px 12px; }
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .cal-head b { font-size: 15px; }
+  .cal-head button { border: 0; background: var(--green-light); color: var(--green-dark); width: 30px; height: 30px; border-radius: 8px; font-weight: 800; }
+  .cal-head button:disabled { opacity: .35; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
+  .cal-grid .dow { font-size: 11px; color: var(--muted); font-weight: 700; padding: 2px 0; }
+  .day { border: 0; background: #fff; border-radius: 8px; height: 34px; font-size: 13.5px; color: var(--ink); padding: 0; }
+  .day:hover:not(:disabled) { background: var(--green-light); }
+  .day.past { color: #B8C2BC; background: transparent; }
+  .day.booked { color: #A6B0AA; text-decoration: line-through; background: repeating-linear-gradient(135deg, #F1F3F2 0 4px, #E6EAE8 4px 8px); }
+  .day.today { box-shadow: inset 0 0 0 2px var(--navy); }
+  .day.range { background: var(--green-light); border-radius: 0; color: var(--green-dark); }
+  .day.start, .day.end { background: var(--green); color: #fff; text-decoration: none; }
+  .day.start { border-radius: 8px 0 0 8px; } .day.end { border-radius: 0 8px 8px 0; }
+  .day.start.end { border-radius: 8px; }
+  .cal-legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); margin: 8px 0 4px; flex-wrap: wrap; }
+  .cal-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+  .cal-sum { font-size: 13.5px; min-height: 20px; margin: 4px 0 8px; }
+  .cal-sum.warn { color: var(--amber); font-weight: 600; }
+  .cal.locked .day, .cal.locked .cal-head button { pointer-events: none; }
+  .cal.locked { opacity: .75; }
+
+  /* Cart */
+  .cartbar {
+    flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 7px 12px; background: var(--green-dark); color: #fff; font-size: 14px;
+  }
+  .cartbar[hidden] { display: none; }
+  .cartbar button { border: 0; background: #fff; color: var(--green-dark); font-weight: 700; padding: 5px 12px; border-radius: 14px; font-size: 13px; }
+  .cart-line { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .cart-line .grow { flex: 1; min-width: 0; }
+  .cart-line small { display: block; color: var(--muted); font-size: 12px; }
+  .cart-line .rm { border: 0; background: #F1F3F2; color: var(--muted); width: 26px; height: 26px; border-radius: 50%; font-weight: 700; }
+  .cart-total { display: flex; justify-content: space-between; font-weight: 800; font-size: 16px; padding: 8px 0 2px; }
+
+  /* Steps */
+  .steps { list-style: none; margin: 8px 0 4px; padding: 0; }
+  .steps li { position: relative; padding: 0 0 14px 30px; font-size: 14px; }
+  .steps li::before {
+    content: ""; position: absolute; left: 0; top: 1px; width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid #C3CEC7; background: #fff; box-sizing: border-box;
+  }
+  .steps li::after { content: ""; position: absolute; left: 8px; top: 21px; bottom: 1px; width: 2px; background: #D6DFD9; }
+  .steps li:last-child::after { display: none; }
+  .steps li.done::before { background: var(--green); border-color: var(--green); }
+  .steps li.done::after { background: var(--green); }
+  .steps li.done span.tick { position: absolute; left: 4px; top: -1px; color: #fff; font-size: 12px; font-weight: 800; }
+  .steps li.current::before { border-color: var(--green); box-shadow: 0 0 0 4px rgba(26,107,58,.15); }
+  .steps li b { display: block; }
+  .steps li small { color: var(--muted); }
+  .steps li.todo { color: var(--muted); }
+
+  /* Urgent */
+  .urgent-card { background: var(--amber-bg); border: 1.5px solid var(--amber-line); border-left: 6px solid var(--amber); }
+  .urgent-card h3 { color: var(--amber); }
+  .urgent-card .call { display: block; text-decoration: none; text-align: center; margin-top: 6px; background: var(--amber); color: #fff; font-weight: 700; padding: 8px; border-radius: 10px; }
+  .urgent-card .call small { display: block; font-weight: 400; font-size: 12px; opacity: .85; }
+  .urgent-card.danger { background: #FDECEA; border-color: #F3A8A1; border-left-color: var(--red); }
+  .urgent-card.danger h3 { color: var(--red); }
+  .urgent-card.danger .call { background: var(--red); }
+  .urgent-card.danger .call.alt { background: #fff; color: var(--red); border-color: var(--red); }
+  .urgent-card .call.alt { background: #fff; color: var(--amber); border: 1.5px solid var(--amber); }
+
+  /* Composer */
+  .composer { flex: none; display: flex; gap: 6px; align-items: center; padding: 8px; background: #F2F5F3; border-top: 1px solid var(--line); }
+  .composer input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 20px; padding: 10px 14px; font: inherit; background: #fff; }
+  .composer .round { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--green); color: #fff; font-size: 17px; flex: none; }
+  .composer .round.menu { background: #fff; color: var(--green); border: 1px solid var(--line); }
+
+  /* Agent console */
+  .console { position: absolute; inset: 58px 0 0 0; background: #F6F8FB; overflow-y: auto; padding: 12px; z-index: 5; }
+  .console[hidden] { display: none; }
+  .console h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--agent); margin: 14px 0 6px; }
+  .console h2:first-child { margin-top: 0; }
+  .panel { background: #fff; border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow); font-size: 13.5px; }
+  .panel + .panel { margin-top: 8px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 3px 8px; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  .flag { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; margin: 0 4px 4px 0; }
+  .flag.red { background: #FCE8E6; color: var(--red); }
+  .flag.amber { background: var(--amber-bg); color: var(--amber); }
+  .flag.blue { background: var(--agent-light); color: var(--agent); }
+  .flag.green { background: var(--green-light); color: var(--green-dark); }
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl li { padding: 6px 0; border-bottom: 1px solid #EDF0F4; }
+  .tl li:last-child { border: 0; }
+  .tl .t { font-size: 11px; color: var(--muted); }
+  .tl .intent { font-size: 11px; font-weight: 700; color: var(--agent); background: var(--agent-light); border-radius: 6px; padding: 1px 6px; margin-left: 4px; }
+  .tl .miss { color: var(--red); background: #FCE8E6; }
+  .reply-btn { display: block; width: 100%; text-align: left; border: 1px solid #CDD6E4; background: #fff; color: var(--agent); border-radius: 10px; padding: 8px 10px; margin-top: 6px; font-size: 13.5px; }
+  .reply-btn:hover { background: var(--agent-light); }
+  .reply-tag { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 2px; }
+  .reply-tag.act { color: var(--green-dark); }
+  .take-over { width: 100%; border: 0; background: var(--agent); color: #fff; padding: 9px; border-radius: 10px; font-weight: 700; margin-top: 8px; }
+
+  /* Secure payment page (opens over the chat like a browser page) */
+  .paypage { position: absolute; inset: 0; z-index: 20; background: #F6F7F9; display: flex; flex-direction: column; transform: translateY(100%); transition: transform .35s ease; }
+  .paypage.open { transform: none; }
+  .paypage[hidden] { display: none; }
+  .pp-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #fff; border-bottom: 1px solid #E3E6EA; font-size: 13px; }
+  .pp-bar button { border: 0; background: none; color: var(--green-dark); font-weight: 700; font-size: 13px; padding: 4px 0; }
+  .pp-url { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: #F1F3F5; border-radius: 16px; padding: 6px 10px; color: #3A4650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pp-url .lock { color: var(--green); }
+  .pp-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .pp-brand { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--green-dark); margin-bottom: 12px; }
+  .pp-brand .avatar { width: 30px; height: 30px; font-size: 11px; background: var(--green); color: #fff; }
+  .pp-card { background: #fff; border-radius: 14px; padding: 14px; box-shadow: var(--shadow); margin-bottom: 12px; }
+  .pp-card h2 { margin: 0 0 8px; font-size: 16px; }
+  .pp-line { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; padding: 4px 0; }
+  .pp-line small { display: block; color: var(--muted); font-size: 12px; }
+  .pp-total { display: flex; justify-content: space-between; font-weight: 800; font-size: 18px; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
+  .pp-opt { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 1.5px solid #DDE2E6; background: #fff; border-radius: 12px; padding: 11px 12px; margin-bottom: 8px; font-size: 14.5px; color: var(--ink); }
+  .pp-opt:hover { border-color: var(--green); }
+  .pp-opt small { display: block; color: var(--muted); font-size: 12px; }
+  .pp-opt .ico { font-size: 20px; width: 28px; text-align: center; }
+  .pp-field { display: block; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+  .pp-field input { display: block; width: 100%; margin-top: 4px; font: inherit; font-size: 16px; color: var(--ink); padding: 10px 12px; border: 1.5px solid #DDE2E6; border-radius: 10px; background: #fff; }
+  .pp-field input:focus { border-color: var(--green); outline: none; }
+  .pp-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pp-err { color: var(--red); font-size: 13px; min-height: 18px; margin: 0 0 6px; }
+  .pp-btn { display: block; width: 100%; border: 0; background: var(--green); color: #fff; font-weight: 800; font-size: 16px; padding: 13px; border-radius: 12px; margin-top: 6px; }
+  .pp-btn.ghost { background: #fff; color: var(--ink); border: 1.5px solid #DDE2E6; font-weight: 700; }
+  .pp-link { border: 0; background: none; color: var(--green-dark); font-weight: 700; text-decoration: underline; padding: 6px 0; font-size: 14px; }
+  .pp-foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
+  .pp-center { text-align: center; padding-top: 40px; }
+  .pp-spin { width: 44px; height: 44px; border-radius: 50%; border: 4px solid var(--green-light); border-top-color: var(--green); margin: 0 auto 14px; animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .pp-tick { width: 64px; height: 64px; border-radius: 50%; background: var(--green); color: #fff; font-size: 34px; display: grid; place-items: center; margin: 0 auto 12px; }
+  .pp-demo { background: #FFF8E8; border: 1px dashed var(--amber-line); color: #7A5A12; border-radius: 10px; padding: 8px 10px; font-size: 12.5px; margin-bottom: 12px; }
+  .bank { border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); background: #fff; margin-bottom: 12px; }
+  .bank-head { padding: 12px 14px; color: #fff; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .bank-body { padding: 14px; font-size: 14.5px; }
+  .bank-body .pp-btn { background: var(--bank, #4B3F9E); }
+  .bank-body .pp-btn.ghost { background: #fff; color: var(--ink); }
+  .phone-mock { border: 2px solid #D8DCE2; border-radius: 16px; padding: 10px; margin: 10px 0; background: #FAFBFC; font-size: 13px; }
+
+  /* Notes panel */
+  .notes { background: #fff; border-radius: 18px; box-shadow: var(--shadow); padding: 20px 22px; }
+  .notes h2 { margin: 0 0 4px; font-size: 20px; }
+  .notes h3 { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .07em; color: var(--green); }
+  .notes .lede { color: var(--muted); margin: 0; }
+  .evidence { list-style: none; margin: 0; padding: 0; }
+  .evidence li { padding: 9px 12px; background: var(--green-light); border-radius: 10px; margin-bottom: 6px; border-left: 4px solid var(--green); }
+  .evidence .ev-label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--green-dark); margin-bottom: 2px; }
+  .evidence .src { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .evidence .src a { color: var(--green-dark); }
+  .evidence li.placeholder { background: #FFF8E8; border-left-color: var(--amber-line); color: #7A5A12; }
+  .decisions { margin: 0; padding-left: 18px; }
+  .decisions li { margin-bottom: 6px; }
+  .tries { display: flex; flex-wrap: wrap; gap: 6px; }
+  .try { border: 1px dashed var(--green); background: #fff; color: var(--green-dark); border-radius: 16px; padding: 5px 11px; font-size: 13px; }
+  .try:hover { background: var(--green-light); }
+  .demo-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; margin: 0; }
+  .demo-facts dt { color: var(--muted); }
+  .demo-facts dd { margin: 0; }
+
+  footer { background: var(--green-dark); color: #E7F1EC; margin-top: 12px; }
+  footer .in { max-width: 1180px; margin: 0 auto; padding: 18px 16px; display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; font-size: 13.5px; }
+  footer a { color: #fff; font-weight: 700; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  /* ---- Owner page additions ---- */
+  .topbar .switch { color: var(--green); font-weight: 700; font-size: 13.5px; text-decoration: none; border: 1px solid var(--green); border-radius: 999px; padding: 5px 12px; white-space: nowrap; }
+  .topbar .switch:hover { background: var(--green-light); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+  .stat { background: var(--green-light); border-radius: 10px; padding: 8px 10px; }
+  .stat small { display: block; color: var(--muted); font-size: 12px; }
+  .stat b { display: block; font-size: 18px; color: var(--ink); }
+  .stat em { font-style: normal; font-size: 12px; font-weight: 700; }
+  .stat em.up { color: var(--green); } .stat em.down { color: var(--amber); }
+  .stat.warn { background: var(--amber-bg); }
+  .bars { display: flex; align-items: flex-end; gap: 6px; height: 96px; margin: 10px 0 2px; padding-top: 14px; }
+  .bars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; font-size: 11px; color: var(--muted); }
+  .bars i { display: block; width: 100%; background: #9CC7AE; border-radius: 4px 4px 0 0; position: relative; }
+  .bars i span { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 10.5px; color: var(--ink); white-space: nowrap; }
+  .bars div.now i { background: var(--green); }
+  .stmt { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0; }
+  .stmt td { padding: 4px 0; border-bottom: 1px dashed var(--line); vertical-align: top; }
+  .stmt td:last-child { text-align: right; white-space: nowrap; padding-left: 8px; }
+  .stmt tr.minus td:last-child { color: var(--amber); }
+  .stmt tr.total td { font-weight: 800; border-bottom: 0; border-top: 2px solid var(--ink); }
+  .stmt tr.head td { text-align: left !important; font-weight: 700; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; padding-top: 8px; }
+  .compare { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 10px; font-size: 13px; margin: 6px 0; }
+  .compare b { font-weight: 700; } .compare .h { color: var(--muted); font-size: 12px; }
+  .meter { height: 8px; background: #E3E9E5; border-radius: 99px; overflow: hidden; margin: 2px 0 8px; position: relative; }
+  .meter i { display: block; height: 100%; background: var(--green); border-radius: 99px; }
+  .meter u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--navy); }
+  .day.blocked { background: repeating-linear-gradient(135deg, #FFF4DE 0 4px, #F8E2B8 4px 8px); color: #8A5A0B; }
+  .tip { border-left: 4px solid var(--green); }
+  .tip.raise { border-left-color: var(--navy); }
+  .photo { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); margin: 6px 0; }
+  .photo span { width: 46px; height: 46px; border-radius: 8px; background: linear-gradient(135deg,#c9d6ce,#e9efeb); display: grid; place-items: center; font-size: 20px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1><span>StayEasy</span> Owner Helper</h1>
+  <p>Owner assistant prototype · demo date <b>Thursday 4 February 2027</b> · all data is invented</p>
+  <a class="switch" href="./">Guest prototype →</a>
+</header>
+
+<main class="layout">
+  <section class="phone" aria-label="StayEasy Owner Helper chat">
+    <div class="chat-head" id="chatHead">
+      <div class="avatar" id="headAvatar">SE</div>
+      <div class="who">
+        <b id="headName">StayEasy Owner Helper</b>
+        <small id="headStatus">Online · team here 8am–8pm</small>
+      </div>
+      <button class="toggle" id="agentToggle" aria-pressed="false" title="See what the StayEasy owner team sees">
+        <span>Agent view</span><span class="track" aria-hidden="true"></span>
+      </button>
+      <button class="icon-btn" id="restart" title="Start over: clears this chat" aria-label="Start over">↺</button>
+    </div>
+
+    <div class="agentbar" id="agentbar" hidden>
+      <span id="agentbarText">You're chatting with a person from StayEasy</span>
+      <button data-act="endAgent" data-echo="End chat">End chat</button>
+    </div>
+
+    <div class="chat" id="chat" aria-live="polite"></div>
+
+    <form class="composer" id="composer" autocomplete="off">
+      <button type="button" class="round menu" data-act="menu" data-echo="Menu" aria-label="Show menu" title="Menu">☰</button>
+      <label class="sr" for="msg">Message</label>
+      <input id="msg" placeholder="Type a message…" />
+      <button type="submit" class="round" aria-label="Send">➤</button>
+    </form>
+
+    <div class="console" id="console" hidden aria-label="Agent view"></div>
+  </section>
+
+  <aside class="notes" aria-label="Design notes">
+    <h2>Design notes</h2>
+    <p class="lede">The owner side of StayEasy Helper: a messaging-style assistant for property owners. It answers the questions owners ask most (what will I be paid, who's staying, how am I doing, is that repair fixed?) and brings in their account manager for anything about money disputes or damage.</p>
+
+    <h3>Evidence behind the design</h3>
+    <ul class="evidence" id="evidence"></ul>
+
+    <h3>Design decisions</h3>
+    <ul class="decisions">
+      <li><b>Every pound is explained.</b> Payouts show bookings, commission, cleaning and any repairs line by line, so owners don't need to ask what a deduction was for.</li>
+      <li><b>Show the impact before the action.</b> Blocking dates or changing prices shows the likely effect on earnings <i>before</i> the owner confirms.</li>
+      <li><b>The assistant suggests, the owner decides.</b> Pricing tips explain the data behind them, nothing changes without a tap, and every change can be undone.</li>
+      <li><b>Not every tip is a discount.</b> If a home is in demand, the assistant suggests raising the price.</li>
+      <li><b>Issues are tracked, not just logged.</b> Each report gets a number and live steps, and is prioritised by when the next guests arrive.</li>
+      <li><b>People for money disputes and damage.</b> Questions about deductions and damage claims go straight to the account manager, with the statement and booking already shared.</li>
+      <li><b>Urgent skips the menus.</b> Words like “leak” or “no heating” jump to the on-call team.</li>
+      <li><b>One data set, two sides.</b> Priya's Rose Cottage stay (SE-10482) is the same booking she manages in the <a href="./">guest prototype</a>.</li>
+    </ul>
+
+    <h3>Try typing</h3>
+    <div class="tries" id="tries"></div>
+
+    <h3>Demo setup</h3>
+    <dl class="demo-facts">
+      <dt>Owner</dt><dd>Margaret Hughes, with StayEasy since 2021</dd>
+      <dt>Homes</dt><dd>Rose Cottage (Cotswolds) · Willow Barn (Hay-on-Wye)</dd>
+      <dt>Today</dt><dd>Thu 4 Feb 2027</dd>
+      <dt>Next payout</dt><dd>Fri 12 Feb, for January stays</dd>
+      <dt>Open issue</dt><dd>ISSUE-318: Rose Cottage dishwasher, repair booked Mon 8 Feb</dd>
+      <dt>Team</dt><dd>Hannah (account manager) · Joe (on-call team, urgent)</dd>
+      <dt>Start over</dt><dd>Type “start over” or tap ↺. Nothing is saved.</dd>
+    </dl>
+  </aside>
+</main>
+
+<footer>
+  <div class="in">
+    <span>Designed by <span id="designer"></span> · <a id="linkedin" href="#" target="_blank" rel="noopener">Connect on LinkedIn</a></span>
+    <span>StayEasy is a fictional brand. No real bookings, payments or messages are made. Visits are counted anonymously with GoatCounter (no cookies).</span>
+  </div>
+</footer>
+
+<script>
+/* =====================================================================
+   EDIT ME: your details for the footer and the Design notes panel
+   ===================================================================== */
+const CONFIG = {
+  designerName: "Snehal Mangalagatti",
+  linkedinUrl: "https://www.linkedin.com/in/snehal1998/",
+  evidence: [
+    { label: "What owners need",
+      text: "Holiday-let companies hiring for owner-facing product roles describe the same owner needs: clear visibility of pricing, revenue and issue resolution, help optimising pricing, faster ways to resolve issues, and self-service that cuts the need to contact support. Each journey here maps to one of those needs." },
+    { label: "Why self-service matters",
+      text: "Owners mostly ask about money, bookings and repairs. Answering those instantly, with the detail on screen, frees the owner team for conversations that need judgement: disputed charges, damage and owners thinking of leaving." },
+    { label: "My experience",
+      text: "I have built conversational bots and self-service journeys used by enterprise customers at scale, with clear rules for when a person takes over, and I replaced manual spreadsheet reporting with an in-product dashboard. The owner assistant combines both ideas." },
+  ],
+};
+
+/* =====================================================================
+   Sample data (all invented)
+   ===================================================================== */
+const TODAY = new Date(2027, 1, 4); // Thu 4 Feb 2027 (fixed demo date)
+const OWNER = { first: "Margaret", last: "Hughes", email: "margaret.hughes@example.com", phone: "07700 900241", since: "2021", repairLimit: 150 };
+const COMMISSION = 0.20;
+
+const PROPS = {
+  rose: { id: "rose", name: "Rose Cottage", place: "Bourton-on-the-Water, Cotswolds", icon: "🌹", bg: "linear-gradient(135deg,#B5476B,#E59AAE)",
+    sleeps: 6, rate: 180, minNights: 3, clean: 45, rating: 4.8, reviews: 46,
+    perf: { occPeers: 63, adr: 180, adrPeers: 172, conv: 2.1, convPeers: 3.0 } },
+  willow: { id: "willow", name: "Willow Barn", place: "Hay-on-Wye, Welsh Borders", icon: "🌿", bg: "linear-gradient(135deg,#6B5B2F,#C7B27D)",
+    sleeps: 4, rate: 150, minNights: 2, clean: 40, rating: 4.9, reviews: 31,
+    perf: { occPeers: 29, adr: 150, adrPeers: 158, conv: 3.4, convPeers: 3.1 } },
+};
+
+const BOOKINGS = [
+  { ref: "SE-10495", prop: "willow", guest: "Ellen W.", guests: 2, start: "2027-02-06", end: "2027-02-08", total: 300 },
+  { ref: "SE-10482", prop: "rose", guest: "Priya P.", guests: 4, start: "2027-02-12", end: "2027-02-15", total: 540, note: "Bringing a dog (dog-friendly booking)" },
+  { ref: "SE-10517", prop: "rose", guest: "James K.", guests: 5, start: "2027-02-19", end: "2027-02-22", total: 540 },
+  { ref: "SE-10539", prop: "willow", guest: "Ravi S.", guests: 3, start: "2027-02-26", end: "2027-03-01", total: 450 },
+  { ref: "SE-10560", prop: "rose", guest: "Aisha R.", guests: 6, start: "2027-03-05", end: "2027-03-12", total: 1260 },
+  { ref: "SE-10588", prop: "rose", guest: "Tom B.", guests: 6, start: "2027-03-26", end: "2027-04-02", total: 1260 },
+  { ref: "SE-10592", prop: "willow", guest: "Grace L.", guests: 2, start: "2027-03-12", end: "2027-03-15", total: 450 },
+  { ref: "SE-10503", prop: "willow", guest: "Owen J.", guests: 2, start: "2027-02-13", end: "2027-02-15", total: 300 },
+  { ref: "SE-10521", prop: "willow", guest: "Sophie T.", guests: 4, start: "2027-02-19", end: "2027-02-21", total: 300 },
+  { ref: "SE-10533", prop: "rose", guest: "Daniel O.", guests: 4, start: "2027-02-26", end: "2027-03-01", total: 540 },
+  { ref: "SE-10547", prop: "willow", guest: "Mei C.", guests: 2, start: "2027-03-05", end: "2027-03-07", total: 300 },
+  { ref: "SE-10571", prop: "rose", guest: "Hugh & Ann D.", guests: 2, start: "2027-03-19", end: "2027-03-22", total: 540 },
+  { ref: "SE-10575", prop: "willow", guest: "Leah F.", guests: 3, start: "2027-03-19", end: "2027-03-21", total: 300 },
+  { ref: "SE-10599", prop: "willow", guest: "Ben & Zoe P.", guests: 2, start: "2027-04-02", end: "2027-04-05", total: 450 },
+];
+const BLOCKS = []; // { prop, start, end }
+
+/* January statement, paid Fri 12 Feb */
+const STATEMENT = {
+  month: "January 2027", payDate: "2027-02-12", account: "Bluebell Bank ••2290",
+  homes: {
+    rose: { stays: [["SE-10301", "2–5 Jan", 540], ["SE-10344", "15–18 Jan", 540], ["SE-10390", "22–25 Jan", 540]],
+      repairs: [{ id: "kettle", label: "Replacement kettle (guest reported broken, 16 Jan)", amount: 28 }] },
+    willow: { stays: [["SE-10322", "8–10 Jan", 300], ["SE-10377", "29–31 Jan", 300]], repairs: [] },
+  },
+  credits: [],
+};
+const HISTORY = [["Aug", 3420], ["Sep", 2180], ["Oct", 1960], ["Nov", 1240], ["Dec", 2240]];
+
+const ISSUES = {
+  "ISSUE-318": { id: "ISSUE-318", prop: "rose", title: "Dishwasher not draining", by: "Reported by housekeeping", steps: [
+    { label: "Reported by housekeeping", date: "Mon 1 Feb", state: "done" },
+    { label: "Engineer booked: Cotswold Appliance Repairs", date: "Mon 8 Feb, 10am–12pm · est. £85 (under your £150 limit)", state: "done" },
+    { label: "Repair visit", date: "Mon 8 Feb", state: "current" },
+    { label: "Checked by housekeeping before next guests", date: "By Fri 12 Feb (Priya P. arrives)", state: "todo" },
+  ] },
+};
+
+const TIPS = {
+  rose: [
+    { id: "midweek", kind: "drop", title: "March midweek is quiet",
+      why: () => `Sun–Thu nights in March are ${midweekMarch("rose")}% booked at Rose Cottage, against 61% for similar 3-bedroom homes within 10 miles.`,
+      action: "Try 15% off Sun–Thu nights in March", before: "£180", after: "£153", nights: 5,
+      detail: "Weekends stay at £180. Based on similar homes, this usually adds about 5 nights." },
+    { id: "minstay", kind: "rule", title: "Your 3-night minimum is turning guests away",
+      why: "In the last 60 days, 23 people searched for 2-night stays in March and couldn't book Rose Cottage. 70% of similar homes allow 2 nights outside school holidays.",
+      action: "Allow 2-night stays in March (outside half-term)", before: "3 nights", after: "2 nights", nights: 4,
+      detail: "Cleaning is charged per stay, so shorter stays don't cost you more." },
+  ],
+  willow: [
+    { id: "easter", kind: "raise", title: "Easter weekend is in demand",
+      why: "Similar homes in Hay-on-Wye are 90% booked for Fri 26 – Mon 29 Mar, and Willow Barn had 41 views for those dates this week.",
+      action: "Raise Easter weekend (26–29 Mar) by 10%", before: "£150", after: "£165", nights: 0,
+      detail: "Demand is high, so a higher price is unlikely to cost you the booking." },
+  ],
+};
+
+const AGENTS = {
+  hannah: { id: "hannah", name: "Hannah", role: "Owner account manager", initials: "HA" },
+  joe: { id: "joe", name: "Joe", role: "On-call team", initials: "JO" },
+};
+const ONCALL = "07700 900111";
+
+/* =====================================================================
+   Helpers
+   ===================================================================== */
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = (n) => String(n).padStart(2, "0");
+const D = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const fmt = (s, o = { weekday: "short", day: "numeric", month: "short" }) => (typeof s === "string" ? D(s) : s).toLocaleDateString("en-GB", o);
+const nightsBetween = (a, b) => Math.round((D(b) - D(a)) / 864e5);
+const daysUntil = (s) => Math.round((D(s) - TODAY) / 864e5);
+const money = (n) => (n < 0 ? "−£" : "£") + Math.abs(Math.round(n)).toLocaleString("en-GB");
+const clock = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const byRef = (ref) => BOOKINGS.find((b) => b.ref === ref);
+const upcomingFor = (prop) => BOOKINGS.filter((b) => (!prop || b.prop === prop) && b.end > iso(TODAY)).sort((a, b) => a.start.localeCompare(b.start));
+const nextArrival = (prop) => upcomingFor(prop).find((b) => b.start >= iso(TODAY));
+const payout = (gross) => Math.round(gross * (1 - COMMISSION));
+
+function btn(label, act, args = [], cls = "btn", echo) {
+  return `<button class="${cls}" data-act="${act}" data-args="${esc(JSON.stringify(args))}"${echo !== undefined ? ` data-echo="${esc(echo)}"` : ""}>${label}</button>`;
+}
+
+/* =====================================================================
+   State
+   ===================================================================== */
+const S = {
+  misses: 0, awaiting: null, focusProp: null, focusIssue: null,
+  agent: null, urgent: false, handoverReason: null, script: null, agentChips: null,
+  log: [], agentAutoNoteShown: false, nextIssue: 319, applied: [], draft: null,
+};
+
+/* =====================================================================
+   Message engine (same as the guest prototype)
+   ===================================================================== */
+const chat = $("#chat");
+let queue = Promise.resolve();
+const scroll = () => requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; });
+function append(node) { chat.appendChild(node); scroll(); return node; }
+function el(html) { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+function rowHTML(kind, inner, { wide = false, from = "" } = {}) {
+  return `<div class="row ${kind}"><div class="bubble${wide ? " wide" : ""}">${from ? `<span class="from">${esc(from)}</span>` : ""}${inner}${wide ? "" : `<span class="meta">${clock()}${kind === "user" ? " ✓✓" : ""}</span>`}</div></div>`;
+}
+function post(fn, delay = 0) {
+  queue = queue.then(() => new Promise((res) => {
+    setTimeout(() => { const out = fn(); if (out) append(typeof out === "string" ? el(out) : out); res(); }, delay);
+  }));
+  return queue;
+}
+function say(content, { wide = false, delay, as = null } = {}) {
+  const ms = delay ?? (wide ? 650 : Math.min(400 + String(content).length * 4, 1100));
+  queue = queue.then(() => new Promise((res) => {
+    const t = append(el(`<div class="row ${as ? "agent" : "bot"}"><div class="bubble"><span class="typing"><i></i><i></i><i></i></span></div></div>`));
+    setTimeout(() => {
+      t.remove();
+      const from = as ? `${AGENTS[as].name} · StayEasy ${AGENTS[as].role}` : "";
+      if (content instanceof Node) {
+        const r = el(rowHTML(as ? "agent" : "bot", "", { wide: true }));
+        r.firstElementChild.appendChild(content); append(r);
+      } else append(el(rowHTML(as ? "agent" : "bot", content, { wide, from })));
+      if (as) S.log.push({ who: AGENTS[as].name, text: content instanceof Node ? "[card]" : stripTags(content), time: clock() });
+      renderConsole();
+      res();
+    }, ms);
+  }));
+  return queue;
+}
+const sayAs = (agentId, content) => say(content, { as: agentId });
+const stripTags = (h) => { const d = document.createElement("div"); d.innerHTML = h; return d.textContent; };
+function chips(list) {
+  post(() => `<div class="chips">${list.map(([label, act, args = [], cls = ""]) => btn(label, act, args, "chip " + cls)).join("")}</div>`);
+}
+function sys(text, cls = "") { post(() => `<div class="sys-pill ${cls}">${esc(text)}</div>`, 0); }
+function userSay(text) { append(el(rowHTML("user", esc(text)))); }
+const card = (inner, cls = "") => `<div class="card ${cls}"><div class="body">${inner}</div></div>`;
+
+function carousel(cardsHTML, hint = "Swipe for more →") {
+  const wrap = el(`<div class="carousel-wrap"><div class="carousel">${cardsHTML.join("")}</div>
+    ${cardsHTML.length > 1 ? `<button class="car-nav prev" aria-label="Previous">‹</button><button class="car-nav next" aria-label="Next">›</button><p class="car-hint">${hint}</p>` : ""}</div>`);
+  const track = wrap.querySelector(".carousel");
+  if (cardsHTML.length === 1) track.firstElementChild.style.flexBasis = "100%";
+  wrap.querySelectorAll(".car-nav").forEach((b) => b.addEventListener("click", () => {
+    track.scrollBy({ left: (b.classList.contains("next") ? 1 : -1) * track.clientWidth * 0.8, behavior: "smooth" });
+  }));
+  return wrap;
+}
+function steps(list) {
+  return `<ol class="steps">${list.map((s) => `<li class="${s.state}">${s.state === "done" ? '<span class="tick">✓</span>' : ""}<b>${s.label}</b><small>${s.date}</small></li>`).join("")}</ol>`;
+}
+function hero(p, tag = "") {
+  return `<div class="hero" style="background:${p.bg}"><span aria-hidden="true">${p.icon}</span>${tag ? `<span class="tag">${tag}</span>` : ""}</div>`;
+}
+
+/* =====================================================================
+   Money
+   ===================================================================== */
+function homeLines(id) {
+  const h = STATEMENT.homes[id], p = PROPS[id];
+  const gross = h.stays.reduce((t, s) => t + s[2], 0);
+  const comm = Math.round(gross * COMMISSION), clean = h.stays.length * p.clean;
+  const repairs = h.repairs.filter((r) => !r.waived).reduce((t, r) => t + r.amount, 0);
+  return { gross, comm, clean, repairs, net: gross - comm - clean - repairs };
+}
+function statementTotal() {
+  const homes = Object.keys(STATEMENT.homes).reduce((t, id) => t + homeLines(id).net, 0);
+  return homes + STATEMENT.credits.reduce((t, c) => t + c.amount, 0);
+}
+
+function payoutCard() {
+  const total = statementTotal(), last = HISTORY[HISTORY.length - 1][1];
+  const max = Math.max(...HISTORY.map((h) => h[1]), total);
+  const bars = [...HISTORY, ["Jan", total]].map(([m, v], i, a) => `<div class="${i === a.length - 1 ? "now" : ""}"><i style="height:${Math.round(v / max * 70)}px"><span>${money(v)}</span></i>${m}</div>`).join("");
+  return card(`<h3>Next payout: ${money(total)}</h3>
+    <p class="sub">For ${STATEMENT.month} stays · paid ${fmt(STATEMENT.payDate, { weekday: "long", day: "numeric", month: "long" })} to ${STATEMENT.account}</p>
+    <div class="stats">
+      <div class="stat"><small>Rose Cottage</small><b>${money(homeLines("rose").net)}</b><small>${STATEMENT.homes.rose.stays.length} stays</small></div>
+      <div class="stat"><small>Willow Barn</small><b>${money(homeLines("willow").net)}</b><small>${STATEMENT.homes.willow.stays.length} stays</small></div>
+    </div>
+    <p class="sub" style="margin:8px 0 0"><b style="color:var(--ink)">Your last 6 payouts</b></p>
+    <div class="bars" aria-label="Payouts August to January">${bars}</div>
+    <p class="note">January is usually quiet. Your payout is ${total < last ? "lower than" : "higher than"} December's ${money(last)}, as it was last year.</p>
+    <div class="actions">${btn("See the full statement", "statement", [], "btn", "See the full statement")}${btn("Download PDF", "pdf", [], "btn ghost", "Download PDF")}</div>`);
+}
+
+function statementCard() {
+  let rows = "";
+  for (const id of Object.keys(STATEMENT.homes)) {
+    const h = STATEMENT.homes[id], p = PROPS[id], l = homeLines(id);
+    rows += `<tr class="head"><td colspan="2">${p.icon} ${p.name}</td></tr>`;
+    rows += h.stays.map(([ref, dates, amt]) => `<tr><td>${dates} · ${ref}</td><td>${money(amt)}</td></tr>`).join("");
+    rows += `<tr class="minus"><td>StayEasy commission (${COMMISSION * 100}%)</td><td>${money(-l.comm)}</td></tr>`;
+    rows += `<tr class="minus"><td>Cleaning and laundry (${h.stays.length} × ${money(p.clean)})</td><td>${money(-l.clean)}</td></tr>`;
+    rows += h.repairs.map((r) => `<tr class="minus"><td>${r.label}${r.waived ? ` <i>(refunded by ${r.waived})</i>` : ""}</td><td>${r.waived ? `<s>${money(-r.amount)}</s>` : money(-r.amount)}</td></tr>`).join("");
+  }
+  rows += STATEMENT.credits.map((c) => `<tr><td>${c.label}</td><td>${money(c.amount)}</td></tr>`).join("");
+  rows += `<tr class="total"><td>Paid to you on ${fmt(STATEMENT.payDate)}</td><td>${money(statementTotal())}</td></tr>`;
+  return card(`<h3>Statement · ${STATEMENT.month}</h3><table class="stmt">${rows}</table>
+    <p class="note">Guests pay StayEasy when they book. We pay you on the 12th of the month after their stay, minus commission and costs.</p>
+    <div class="actions">${btn("Query a charge", "query", [], "btn ghost", "Query a charge")}${btn("Download PDF", "pdf", [], "btn ghost", "Download PDF")}</div>`);
+}
+
+/* =====================================================================
+   Bookings and calendar
+   ===================================================================== */
+function bookingCard(b) {
+  const p = PROPS[b.prop], n = nightsBetween(b.start, b.end), left = daysUntil(b.start);
+  const pill = left <= 0 ? `<span class="pill up">Staying now</span>` : `<span class="pill up">In ${left} day${left === 1 ? "" : "s"}</span>`;
+  return `<div class="card">${hero(p, b.ref)}<div class="body">
+    <h3>${p.name} ${pill}</h3><p class="sub">${b.guest} · ${b.guests} guest${b.guests === 1 ? "" : "s"}</p>
+    <ul class="facts">
+      <li><span>Dates</span><span>${fmt(b.start)} → ${fmt(b.end)}</span></li>
+      <li><span>Nights</span><span>${n}</span></li>
+      <li><span>Booking value</span><span>${money(b.total)}</span></li>
+      <li><span>Your payout</span><span>${money(payout(b.total) - p.clean)}</span></li>
+      ${b.note ? `<li><span>Note</span><span>${b.note}</span></li>` : ""}
+    </ul>
+    <p class="note">Guest contact details stay private. The StayEasy team handles all guest messages.</p></div></div>`;
+}
+function nightsSet(prop, kind) {
+  const set = new Set();
+  const add = (a, b) => { for (let d = D(a); d < D(b); d = addDays(d, 1)) set.add(iso(d)); };
+  if (kind === "booked") BOOKINGS.filter((b) => b.prop === prop).forEach((b) => add(b.start, b.end));
+  else BLOCKS.filter((b) => b.prop === prop).forEach((b) => add(b.start, b.end));
+  return set;
+}
+function occupancy(prop, from, to) {
+  const booked = nightsSet(prop, "booked"); let n = 0, all = 0;
+  for (let d = D(from); d < D(to); d = addDays(d, 1)) { all++; if (booked.has(iso(d))) n++; }
+  return Math.round(n / all * 100);
+}
+
+const occ60 = (id) => occupancy(id, iso(TODAY), iso(addDays(TODAY, 60)));
+function midweekMarch(id) {
+  const booked = nightsSet(id, "booked"); let n = 0, all = 0;
+  for (let d = new Date(2027, 2, 1); d < new Date(2027, 3, 1); d = addDays(d, 1)) if (d.getDay() <= 4) { all++; if (booked.has(iso(d))) n++; }
+  return Math.round(n / all * 100);
+}
+function calendar({ prop, month, onConfirm }) {
+  const p = PROPS[prop], booked = nightsSet(prop, "booked"), blocked = nightsSet(prop, "blocked");
+  const minView = new Date(2027, 1, 1), maxView = new Date(2027, 5, 1);
+  let view = new Date(month.getFullYear(), month.getMonth(), 1), a = null, b = null, warn = "";
+  const root = el(`<div class="card"><div class="cal"></div></div>`), cal = root.firstElementChild;
+  const free = (s, e) => { for (let d = D(s); d < D(e); d = addDays(d, 1)) if (booked.has(iso(d)) || blocked.has(iso(d))) return false; return true; };
+  function render() {
+    const y = view.getFullYear(), m = view.getMonth();
+    const first = new Date(y, m, 1), lead = (first.getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
+    let cells = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => `<span class="dow">${d}</span>`).join("");
+    for (let i = 0; i < lead; i++) cells += "<span></span>";
+    for (let d = 1; d <= days; d++) {
+      const date = new Date(y, m, d), k = iso(date), cls = ["day"], past = date < TODAY;
+      if (past) cls.push("past"); else if (booked.has(k)) cls.push("booked"); else if (blocked.has(k)) cls.push("blocked");
+      if (+date === +TODAY) cls.push("today");
+      if (a && k === a) cls.push("start");
+      if (b && k === b) cls.push("end");
+      if (a && b && k > a && k < b) cls.push("range");
+      const label = `${fmt(date, { weekday: "long", day: "numeric", month: "long" })}${booked.has(k) ? ", guests booked" : blocked.has(k) ? ", blocked by you" : ""}`;
+      cells += `<button class="${cls.join(" ")}" data-day="${k}" ${past ? "disabled" : ""} aria-label="${label}">${d}</button>`;
+    }
+    let sum = "Tap the first night you want, then the day you'll leave.";
+    if (a && !b) sum = `From ${fmt(a)}. Now tap the day you'll leave.`;
+    if (a && b) sum = `<b>${fmt(a)} → ${fmt(b)}</b> · ${nightsBetween(a, b)} night${nightsBetween(a, b) === 1 ? "" : "s"} for you`;
+    cal.innerHTML = `
+      <p class="sub" style="margin:0 0 6px"><b style="color:var(--ink)">${p.name} · ${occupancy(prop, iso(view), iso(new Date(y, m + 1, 1)))}% booked this month</b></p>
+      <div class="cal-head">
+        <button data-nav="-1" ${view <= minView ? "disabled" : ""} aria-label="Previous month">‹</button>
+        <b>${fmt(view, { month: "long", year: "numeric" })}</b>
+        <button data-nav="1" ${view >= maxView ? "disabled" : ""} aria-label="Next month">›</button>
+      </div>
+      <div class="cal-grid">${cells}</div>
+      <div class="cal-legend"><span><i style="background:repeating-linear-gradient(135deg,#F1F3F2 0 3px,#DDE2DF 3px 6px)"></i>Guests</span><span><i style="background:repeating-linear-gradient(135deg,#FFF4DE 0 3px,#F8E2B8 3px 6px)"></i>Your own use</span><span><i style="background:var(--green)"></i>Selected</span></div>
+      <p class="cal-sum ${warn ? "warn" : ""}">${warn || sum}</p>
+      <button class="btn" data-confirm style="width:100%" ${a && b ? "" : "disabled"}>Block these dates</button>`;
+  }
+  cal.addEventListener("click", (e) => {
+    const nav = e.target.closest("[data-nav]");
+    if (nav) { view = new Date(view.getFullYear(), view.getMonth() + Number(nav.dataset.nav), 1); render(); return; }
+    if (e.target.closest("[data-confirm]")) {
+      cal.classList.add("locked"); e.target.closest("[data-confirm]").disabled = true;
+      userSay(`Block ${fmt(a)} → ${fmt(b)}`); onConfirm(a, b); return;
+    }
+    const day = e.target.closest("[data-day]"); if (!day) return;
+    const k = day.dataset.day; warn = "";
+    if (!a || b || k <= a) {
+      if (booked.has(k)) { warn = `Guests are booked on ${fmt(k)}. Pick a free night (not struck through).`; a = null; b = null; }
+      else if (blocked.has(k)) { warn = `You've already blocked ${fmt(k)}.`; a = null; b = null; }
+      else { a = k; b = null; }
+    } else if (nightsBetween(a, k) > 28) warn = "You can block up to 28 nights at a time.";
+    else if (!free(a, k)) warn = "Guests are already booked on some of those nights. Your guests' stays can't be moved here; talk to Hannah if you need them changed.";
+    else b = k;
+    render();
+  });
+  render();
+  return root;
+}
+
+/* =====================================================================
+   Performance and tips
+   ===================================================================== */
+function perfCard(id) {
+  const p = PROPS[id], f = { ...p.perf, occ: occ60(id) };
+  const row = (label, mine, peers, unit, better) => `<span>${label}</span><b>${mine}${unit}</b><span>${peers}${unit}</span>`;
+  const meter = (mine, peers) => `<div class="meter"><i style="width:${mine}%"></i><u style="left:${peers}%"></u></div>`;
+  const behind = f.occ < f.occPeers;
+  return `<div class="card">${hero(p, `${p.rating}★ · ${p.reviews} reviews`)}<div class="body">
+    <h3>${p.name}</h3><p class="sub">Next 60 days, compared with similar homes nearby</p>
+    <div class="stats">
+      <div class="stat ${behind ? "warn" : ""}"><small>Booked</small><b>${f.occ}%</b><em class="${behind ? "down" : "up"}">${behind ? "▼" : "▲"} similar homes ${f.occPeers}%</em></div>
+      <div class="stat"><small>Average nightly price</small><b>${money(f.adr)}</b><em class="${f.adr >= f.adrPeers ? "up" : "down"}">similar homes ${money(f.adrPeers)}</em></div>
+    </div>
+    ${meter(f.occ, f.occPeers)}
+    <div class="compare"><span class="h"></span><span class="h">You</span><span class="h">Similar</span>
+      ${row("Views that become bookings", f.conv, f.convPeers, "%")}
+      ${row("Guest rating", p.rating, id === "rose" ? 4.6 : 4.7, "★")}
+    </div>
+    <p class="note">${behind ? `You're less booked than similar homes (${f.occ}% vs ${f.occPeers}%). I have ${TIPS[id].length} suggestion${TIPS[id].length === 1 ? "" : "s"} that could close the gap.` : `You're ahead of similar homes. There's room to earn more on your busiest dates.`}</p>
+    <div class="actions">${btn(`See ${TIPS[id].length === 1 ? "the suggestion" : "suggestions"}`, "tips", [id], "btn", `Suggestions for ${p.name}`)}</div></div></div>`;
+}
+function tipCard(id, t) {
+  const done = S.applied.includes(t.id);
+  const gain = t.nights ? payout(t.nights * (t.kind === "drop" ? 153 : PROPS[id].rate)) : payout(3 * 15);
+  return `<div class="card tip ${t.kind === "raise" ? "raise" : ""}">${hero(PROPS[id], t.kind === "raise" ? "📈 Earn more" : "💡 Suggestion")}<div class="body"><h3>${t.title}</h3><p style="margin:4px 0 6px">${typeof t.why === "function" ? t.why() : t.why}</p>
+    <ul class="facts"><li><span>Suggestion</span><span>${t.action}</span></li>
+      <li><span>Change</span><span>${t.before} → ${t.after}</span></li>
+      <li><span>Likely effect</span><span>${t.nights ? `+${t.nights} nights · about +${money(gain)} to you` : `about +${money(gain)} to you if booked`}</span></li></ul>
+    <p class="note">${t.detail}</p>
+    <div class="actions">${done ? `<p class="note" style="color:var(--green);font-weight:700">✓ Applied. Type “undo” to reverse it.</p>` :
+      btn("Apply", "tipReview", [id, t.id], "btn", `Apply: ${t.action}`) + btn("Why this?", "tipWhy", [id, t.id], "btn ghost", "Why this suggestion?") + btn("Not now", "tipSkip", [id, t.id], "btn ghost", "Not now")}</div></div></div>`;
+}
+const findTip = (id, tid) => TIPS[id].find((t) => t.id === tid);
+
+/* =====================================================================
+   Issues
+   ===================================================================== */
+const ISSUE_TYPES = {
+  repair: { label: "Repair or broken item", icon: "🔧", opts: ["Boiler or heating", "Appliance", "Plumbing", "Something else"] },
+  clean: { label: "Cleaning or housekeeping", icon: "🧽", opts: ["Not cleaned to standard", "Linen or towels", "Supplies running low"] },
+};
+function issueCard(id) {
+  const i = ISSUES[id], p = PROPS[i.prop], next = nextArrival(i.prop);
+  return card(`<h3>${id} · ${i.title}</h3><p class="sub">${p.name} · ${i.by}</p>${steps(i.steps)}
+    ${next ? `<p class="note">Next guests arrive ${fmt(next.start, { weekday: "long", day: "numeric", month: "short" })} (${next.guest}), so this is scheduled to be fixed before then.</p>` : ""}`);
+}
+
+/* =====================================================================
+   Scripted account-manager conversations
+   ===================================================================== */
+const DONE = ["Thanks, that's all", "endAgent"];
+const SCRIPTS = {
+  query: {
+    start: () => ({
+      say: [`Hi ${OWNER.first}, Hannah here, your account manager. I can see your January statement. Which charge would you like me to look into?`],
+      chips: [["The £28 kettle", "agentStep", ["query", "kettle"]], ["Cleaning charges", "agentStep", ["query", "clean"]]] }),
+    kettle: () => ({
+      say: [`The guest in Rose Cottage on 15–18 Jan (SE-10344) reported on 16 Jan that the kettle had stopped working. Our housekeeper replaced it that day so the guests weren't without one, and charged the £28 to your statement. I've got the receipt if you'd like it.`,
+            `Your current setting lets us fix things under ${money(OWNER.repairLimit)} without asking you, which is why you weren't contacted.`],
+      chips: [["That's fine, thanks", "agentStep", ["query", "fine"]], ["I'd rather be asked first", "agentStep", ["query", "ask"]], ["Can you refund it?", "agentStep", ["query", "refund"]]] }),
+    clean: () => ({
+      say: [`Cleaning and laundry are charged per stay: ${money(PROPS.rose.clean)} at Rose Cottage and ${money(PROPS.willow.clean)} at Willow Barn. They cover the clean, fresh linen and towels, and a check that everything works before the next guests arrive.`],
+      chips: [["Makes sense, thanks", "agentStep", ["query", "fine"]], ["What about the kettle?", "agentStep", ["query", "kettle"]]] }),
+    fine: () => ({ say: [`Great. Anything else I can help with, ${OWNER.first}?`], chips: [DONE] }),
+    ask: () => { OWNER.repairLimit = 25; return {
+      say: [`Of course. I've changed your setting: from now on, we'll message you here before any repair over <b>£25</b>, unless it's an emergency with guests staying. Emergencies we'll still fix straight away and tell you after.`],
+      chips: [["Perfect, thank you", "agentStep", ["query", "fine"]], DONE] }; },
+    refund: () => {
+      const r = STATEMENT.homes.rose.repairs.find((x) => x.id === "kettle"); r.waived = "Hannah";
+      return {
+        say: [`I can do that as a one-off. The old kettle was over 5 years old, so it's fair wear, but I understand it came out of nowhere. I've removed the £28 from your statement.`],
+        card: () => statementCard(),
+        chips: [["Thank you", "agentStep", ["query", "fine"]], ["I'd rather be asked first in future", "agentStep", ["query", "ask"]]] }; },
+  },
+  damage: {
+    start: () => { const b = BOOKINGS.find((x) => x.ref === "SE-10495");
+      return {
+        say: [`Hi ${OWNER.first}, Hannah here. I'm sorry to hear about the damage. Damage claims need a person because we have to agree it with the guest, so I'll take it from here.`,
+              `Which stay was it after? The most recent was ${PROPS.willow.name}, ${b.guest}, ${fmt(b.start)} → ${fmt(b.end)}.`],
+        chips: [["A stay in January", "agentStep", ["damage", "photos"]], ["I'm not sure which stay", "agentStep", ["damage", "photos"]]] }; },
+    photos: () => ({
+      say: [`Thanks. Could you send photos and, if you have one, a quote or receipt for the repair? Housekeeping photographs every home after each stay, so I'll compare them to find which stay it happened in.`,
+            `Once we know the stay, I'll contact the guest and claim against their damage deposit. Most claims are settled within 10 working days, and I'll update you here at each step.`],
+      chips: [["📷 Photos sent", "agentStep", ["damage", "sent"]], DONE] }),
+    sent: () => ({
+      say: [`Got them, thank you. I've opened <b>CLAIM-112</b> and I'll message you by <b>Tue 9 Feb</b> with which stay it was and what happens next.`],
+      chips: [["Thank you", "agentStep", ["query", "fine"]], DONE] }),
+  },
+};
+function agentStep(script, step) {
+  const out = SCRIPTS[script][step](), who = S.agent || "hannah";
+  out.say.forEach((m) => sayAs(who, m));
+  if (out.card) post(() => rowHTML("agent", "", { wide: true }).replace("</div></div>", out.card() + "</div></div>"));
+  S.agentChips = out.chips; chips(out.chips);
+}
+function closingMessage() {
+  const a = AGENTS[S.agent || "hannah"];
+  return S.urgent
+    ? `Thanks ${OWNER.first}. The on-call team has this in hand and I'll update you here as soon as the engineer has been. – ${a.name}`
+    : `Thanks for chatting, ${OWNER.first}. I'll close this chat now. If anything else comes up, the Owner Helper is here any time and can bring me back. – ${a.name}`;
+}
+
+/* =====================================================================
+   Flows
+   ===================================================================== */
+const MENU = [
+  ["💷 Earnings & payouts", "earnings"], ["📅 Bookings & calendar", "bookings"], ["⛔ Block dates for my own use", "block"],
+  ["📈 How am I doing?", "performance"], ["🔧 Report an issue", "report"], ["📋 Track my issues", "issues"],
+  ["⚠ Urgent problem", "urgent", [], "urgent"], ["Talk to Hannah", "human", [], "person"], ["↺ Start over", "startOver"],
+];
+function moreHint(delay) { say("Need something else? Tap <b>☰</b> below or just type, e.g. “when am I paid?” or “block dates”.", { delay }); }
+function pickProp(next, question, allowBoth = false) {
+  S.awaiting = { type: "property", next };
+  say(question);
+  chips([...Object.values(PROPS).map((p) => [`${p.icon} ${p.name}`, next, [p.id]]), ...(allowBoth ? [["Both homes", next, ["both"]]] : [])]);
+}
+
+const A = {
+  welcome() {
+    sys("Today");
+    const STEP = 1000, next = nextArrival();
+    say(`Hi ${OWNER.first} 👋 I'm <b>StayEasy Owner Helper</b>. I can show your earnings, bookings and repairs in a few taps, and bring in Hannah, your account manager, at any time.`, { delay: STEP });
+    say(card(`<h3>This week at a glance</h3><ul class="facts">
+      <li><span>Next payout</span><span><b>${money(statementTotal())}</b> on Fri 12 Feb</span></li>
+      <li><span>Next arrival</span><span>${PROPS[next.prop].name}, ${fmt(next.start)} (${next.guest})</span></li>
+      <li><span>Open issue</span><span>Rose Cottage dishwasher: repair Mon 8 Feb</span></li>
+      <li><span>Spring</span><span>Rose Cottage is ${occ60("rose")}% booked vs ${PROPS.rose.perf.occPeers}% for similar homes</span></li></ul>
+      <div class="actions">${btn("See my payout", "earnings", [], "btn", "See my payout")}${btn("How can I get more bookings?", "performance", ["rose"], "btn ghost", "How can I get more bookings?")}</div>`), { wide: true, delay: STEP });
+    moreHint(STEP);
+  },
+  menu() {
+    S.awaiting = null;
+    if (S.agent) { const n = AGENTS[S.agent].name; say(`You're still chatting with ${n}. I can help with these too:`); return chips([[`End chat with ${n}`, "endAgent", [], "person"], ...MENU.filter(([, a]) => a !== "human")]); }
+    say("Here's what I can help with:"); chips(MENU);
+  },
+
+  /* ---- Earnings ---- */
+  earnings() { S.awaiting = null; say(payoutCard(), { wide: true }); chips([["Query a charge", "query"], ["Something else", "menu"]]); },
+  statement() { say(statementCard(), { wide: true }); chips([["How am I doing?", "performance"], ["Something else", "menu"]]); },
+  pdf() { say(`📄 <b>StayEasy statement – ${STATEMENT.month}.pdf</b><br><span class="note">In the real product this downloads your statement. In this demo, nothing is downloaded.</span>`); chips([["Something else", "menu"]]); },
+  query() { A.human("Query about a charge on the January statement"); },
+
+  /* ---- Bookings ---- */
+  bookings(prop) {
+    if (!prop) return pickProp("bookings", "Which home?", true);
+    S.awaiting = null; S.focusProp = prop === "both" ? null : prop;
+    const list = upcomingFor(prop === "both" ? null : prop);
+    const p = prop === "both" ? null : PROPS[prop];
+    say(`${p ? p.name : "Your homes"} ha${p ? "s" : "ve"} <b>${list.length} upcoming booking${list.length === 1 ? "" : "s"}</b> worth ${money(list.reduce((t, b) => t + payout(b.total) - PROPS[b.prop].clean, 0))} to you.`);
+    post(() => carousel(list.map(bookingCard)));
+    chips([...(p ? [[`${p.name} calendar`, "calendar", [prop]], ["Block dates", "block", [prop]]] : [["Rose Cottage calendar", "calendar", ["rose"]], ["Willow Barn calendar", "calendar", ["willow"]]]), ["Something else", "menu"]]);
+  },
+  calendar(prop) {
+    if (!prop || prop === "both") return pickProp("calendar", "Which home's calendar?");
+    S.focusProp = prop; S.awaiting = null;
+    say(`Here's ${PROPS[prop].name}. Struck-through nights are guest bookings. To keep some nights for yourself, tap the first night and the day you'll leave.`);
+    post(() => calendar({ prop, month: TODAY, onConfirm: (s, e) => A.blockReview(prop, s, e) }));
+  },
+  block(prop) {
+    if (!prop || prop === "both") return pickProp("block", "Which home would you like to use yourself?");
+    S.focusProp = prop; S.awaiting = null;
+    say(`Pick the dates you'd like at <b>${PROPS[prop].name}</b>. Struck-through nights already have guests.`);
+    post(() => calendar({ prop, month: new Date(2027, 2, 1), onConfirm: (s, e) => A.blockReview(prop, s, e) }));
+  },
+  blockReview(prop, s, e) {
+    const p = PROPS[prop], n = nightsBetween(s, e);
+    const lost = payout(n * p.rate), wkend = [...Array(n)].some((_, i) => [5, 6].includes(addDays(D(s), i).getDay()));
+    S.draft = { prop, s, e };
+    say(card(`<h3>Before you block these dates</h3>
+      <ul class="facts"><li><span>Home</span><span>${p.name}</span></li><li><span>Dates</span><span>${fmt(s)} → ${fmt(e)} · ${n} night${n === 1 ? "" : "s"}</span></li>
+      <li><span>Likely missed earnings</span><span>about ${money(lost)} to you</span></li></ul>
+      <p class="note">Based on your ${money(p.rate)} nightly price${wkend ? " and weekend demand" : ""}. Guests won't be able to book these nights. You can unblock them any time.</p>
+      <div class="actions">${btn("Block for my own use", "blockConfirm", [], "btn", "Block for my own use")}${btn("Cancel", "menu", [], "btn ghost", "Cancel")}</div>`, "policy fee"), { wide: true });
+  },
+  blockConfirm() {
+    const d = S.draft; if (!d) return A.menu();
+    BLOCKS.push({ prop: d.prop, start: d.s, end: d.e }); S.draft = null; renderConsole();
+    say(`Done ✅ ${fmt(d.s)} → ${fmt(d.e)} at ${PROPS[d.prop].name} are blocked for you. Housekeeping will still clean after your stay. Enjoy it, ${OWNER.first}!`);
+    chips([["See the calendar", "calendar", [d.prop]], ["Undo", "unblock", [], ""], ["Something else", "menu"]]);
+  },
+  unblock() {
+    const b = BLOCKS.pop();
+    if (!b) { say("You haven't blocked any dates in this chat."); return chips([["Block dates", "block"], ["Main menu", "menu"]]); }
+    say(`Unblocked ${fmt(b.start)} → ${fmt(b.end)} at ${PROPS[b.prop].name}. Guests can book those nights again.`); renderConsole();
+    chips([["See the calendar", "calendar", [b.prop]], ["Something else", "menu"]]);
+  },
+
+  /* ---- Performance and pricing ---- */
+  performance(prop) {
+    S.awaiting = null;
+    if (prop && prop !== "both") { S.focusProp = prop; say(`Here's how <b>${PROPS[prop].name}</b> is doing:`); post(() => carousel([perfCard(prop)])); return; }
+    say("Here's how your homes are doing for the next 60 days:");
+    post(() => carousel(Object.keys(PROPS).map(perfCard)));
+  },
+  tips(prop) {
+    S.focusProp = prop;
+    const list = TIPS[prop];
+    say(`${list.length === 1 ? "One suggestion" : `${list.length} suggestions`} for ${PROPS[prop].name}. Nothing changes unless you tap <b>Apply</b>.`);
+    post(() => carousel(list.map((t) => tipCard(prop, t))));
+  },
+  tipWhy(prop, tid) {
+    const t = findTip(prop, tid);
+    say(`I compare ${PROPS[prop].name} with homes of a similar size, quality and rating within 10 miles, using their bookings and prices for the same dates. ${t.kind === "raise" ? "When similar homes are almost full, guests who are still searching expect to pay more." : "When similar homes are filling up and yours isn't, price or booking rules are usually the reason, not the home itself."}`);
+    chips([["Apply it", "tipReview", [prop, tid]], ["Not now", "tipSkip", [prop, tid]]]);
+  },
+  tipSkip(prop, tid) { say("No problem, I'll leave it as it is. I'll only remind you if the gap gets bigger."); chips([["Other suggestions", "tips", [prop]], ["Something else", "menu"]]); },
+  tipReview(prop, tid) {
+    const t = findTip(prop, tid);
+    S.draft = { prop, tid };
+    say(card(`<h3>Check the change</h3><ul class="facts"><li><span>Home</span><span>${PROPS[prop].name}</span></li>
+      <li><span>Change</span><span>${t.action}</span></li><li><span>From → to</span><span>${t.before} → ${t.after}</span></li>
+      <li><span>Existing bookings</span><span>Not affected</span></li></ul>
+      <div class="actions">${btn("Confirm change", "tipConfirm", [], "btn", "Confirm change")}${btn("Cancel", "tipSkip", [prop, tid], "btn ghost", "Cancel")}</div>`), { wide: true });
+  },
+  tipConfirm() {
+    const d = S.draft; if (!d) return A.menu();
+    const t = findTip(d.prop, d.tid); S.applied.push(t.id); S.draft = null;
+    if (t.id === "minstay") PROPS.rose.minNights = 2;
+    say(`Done ✅ <b>${t.action}</b> is live on ${PROPS[d.prop].name}. I'll show you how it's going in 2 weeks. Type <b>undo</b> to reverse it.`);
+    renderConsole();
+    chips([["Other suggestions", "tips", [d.prop]], ["Something else", "menu"]]);
+  },
+  undo() {
+    const id = S.applied.pop();
+    if (!id) return A.unblock();
+    const prop = Object.keys(TIPS).find((p) => TIPS[p].some((t) => t.id === id)), t = findTip(prop, id);
+    if (id === "minstay") PROPS.rose.minNights = 3;
+    say(`Reversed: <b>${t.action}</b> is off, and ${PROPS[prop].name} is back to ${t.before}.`); renderConsole();
+    chips([["Something else", "menu"]]);
+  },
+
+  /* ---- Issues ---- */
+  issues() {
+    S.awaiting = null;
+    const list = Object.keys(ISSUES);
+    say(`You have <b>${list.length} open issue${list.length === 1 ? "" : "s"}</b>:`);
+    post(() => carousel(list.map(issueCard)));
+    chips([["Report a new issue", "report"], ["Something else", "menu"]]);
+  },
+  report(prop, hint) {
+    if (hint) S.hint = hint;
+    if (!prop || prop === "both") return pickProp("report", "Which home is it at?");
+    S.focusProp = prop; S.awaiting = null;
+    S.draft = { prop };
+    if (S.hint) { const h = S.hint; S.hint = null; S.draft.type = h.type; return A.reportWhat(h.what); }
+    say(`What kind of issue is it at ${PROPS[prop].name}?`);
+    chips([["🔧 Repair or broken item", "reportType", ["repair"]], ["🧽 Cleaning or housekeeping", "reportType", ["clean"]], ["🏚 Damage after a stay", "damage"], ["⚠ Urgent (leak, no heating…)", "urgent", [], "urgent"]]);
+  },
+  reportType(type) {
+    S.draft = { ...(S.draft || { prop: "rose" }), type };
+    say("Which of these is closest?");
+    chips(ISSUE_TYPES[type].opts.map((o) => [o, "reportWhat", [o]]));
+  },
+  reportWhat(what) {
+    S.draft.what = what;
+    S.awaiting = { type: "issueText" };
+    say(`Got it: <b>${esc(what.toLowerCase())}</b>. Add a line about what's wrong, or a photo if you have one. You can also skip this.`);
+    chips([["📷 Add a photo", "reportPhoto"], ["Skip", "reportSummary"]]);
+  },
+  reportPhoto() { S.draft.photo = true; post(() => rowHTML("user", `<div class="photo"><span>📷</span>photo_0204.jpg</div>`)); A.reportSummary(); },
+  reportSummary(text) {
+    S.awaiting = null;
+    const d = S.draft; if (text) d.text = text;
+    const p = PROPS[d.prop], next = nextArrival(d.prop), days = next ? daysUntil(next.start) : 99;
+    const urgent = days <= 3;
+    d.priority = urgent ? "High: guests arrive soon" : "Normal";
+    say(card(`<h3>${ISSUE_TYPES[d.type].icon} Check your report</h3><ul class="facts">
+      <li><span>Home</span><span>${p.name}</span></li><li><span>Issue</span><span>${esc(d.what)}${d.text ? `: “${esc(d.text)}”` : ""}</span></li>
+      ${d.photo ? `<li><span>Photo</span><span>1 attached</span></li>` : ""}
+      <li><span>Next guests</span><span>${next ? `${fmt(next.start)} (in ${days} days)` : "None booked"}</span></li>
+      <li><span>Priority</span><span>${d.priority}</span></li>
+      ${d.type === "repair" ? `<li><span>Approval</span><span>Repairs under ${money(OWNER.repairLimit)} go ahead without asking you. Anything more, we'll check with you first.</span></li>` : ""}</ul>
+      <div class="actions">${btn("Send report", "reportSend", [], "btn", "Send report")}${btn("Cancel", "menu", [], "btn ghost", "Cancel")}</div>`), { wide: true });
+  },
+  reportSend() {
+    const d = S.draft, id = `ISSUE-${S.nextIssue++}`, p = PROPS[d.prop], next = nextArrival(d.prop);
+    const who = d.type === "repair" ? "Engineer" : "Housekeeping team";
+    ISSUES[id] = { id, prop: d.prop, title: d.what, by: "Reported by you", steps: [
+      { label: "Reported by you", date: `${fmt(TODAY)}, ${clock()}`, state: "done" },
+      { label: `${who} assigned`, date: `By ${fmt(addDays(TODAY, 1))}, we'll confirm the time here`, state: "current" },
+      { label: d.type === "repair" ? "Fixed" : "Sorted", date: next ? `Before ${next.guest} arrives ${fmt(next.start)}` : "Within 5 working days", state: "todo" },
+      { label: "Checked and closed", date: "You'll get a message here", state: "todo" },
+    ] };
+    S.focusIssue = id; S.draft = null; renderConsole();
+    say(`Thanks ${OWNER.first}. I've logged <b>${id}</b> for ${p.name} and you can track it here:`);
+    post(() => carousel([issueCard(id)]));
+    chips([["Track all issues", "issues"], ["Something else", "menu"]]);
+  },
+  damage() { A.human("Damage after a stay"); },
+
+  /* ---- Urgent ---- */
+  urgent(kind) {
+    S.urgent = true; S.awaiting = null;
+    const prop = S.focusProp || "rose", p = PROPS[prop], b = upcomingFor(prop)[0];
+    const w = kind || "";
+    const what = /leak|flood|burst/.test(w) ? "a leak" : /heating|hot water/.test(w) ? "no heating or hot water" : /gas/.test(w) ? "a gas smell"
+      : /fire|smoke/.test(w) ? "fire or smoke" : /power|electric/.test(w) ? "a power cut" : /break|burgl/.test(w) ? "a break-in" : "an urgent problem";
+    kind = what;
+    const guestsIn = b && daysUntil(b.start) <= 0;
+    say(card(`<h3>⚠ Urgent: ${esc(what)} at ${p.name}</h3>
+      <p style="margin:4px 0">If anyone is in danger, <a href="tel:999"><b>call 999</b></a>. For a gas smell, call the gas emergency line on <a href="tel:08001119999">0800 111 999</a>.</p>
+      <a class="call" href="tel:${ONCALL.replace(/\s/g, "")}">📞 StayEasy on-call team · ${ONCALL}<small>24/7 · sends engineers, contacts guests</small></a>
+      <p class="note" style="color:#7A5A12">${guestsIn ? `Guests are staying at ${p.name} now. Joe will contact them so you don't have to.` : `No guests are at ${p.name} right now${b ? `. The next arrive ${fmt(b.start)}` : ""}.`} Joe is joining this chat now.</p>`, "urgent-card"), { wide: true, delay: 300 });
+    A.human(`URGENT: ${what} at ${p.name}`, "joe");
+  },
+
+  /* ---- People ---- */
+  human(reason, agentId) {
+    if (S.agent) { say(`${AGENTS[S.agent].name} is already in this chat. Just type your message.`); return; }
+    const urgent = (reason || "").startsWith("URGENT") || S.urgent, who = AGENTS[agentId || (urgent ? "joe" : "hannah")];
+    S.handoverReason = reason || lastTopic() || "General question";
+    S.awaiting = null;
+    if (!urgent) say(`I'll bring in ${who.name}, your account manager. I've shared this chat and your statement with her, so you won't need to repeat anything.`);
+    sys(urgent ? `Priority queue · ${who.name} will be with you in under 2 min` : `Waiting for ${who.name} · usually under 3 min`);
+    post(() => { S.agent = who.id; setHeader(); renderConsole(); return `<div class="sys-pill agent">${who.name} (${who.role}) joined the chat</div>`; }, 1600);
+    const script = urgent ? null : /charge|statement|deduct|kettle/i.test(S.handoverReason) ? "query" : /damage/i.test(S.handoverReason) ? "damage" : null;
+    if (script) { S.script = script; return agentStep(script, "start"); }
+    sayAs(who.id, urgent
+      ? `Hi ${OWNER.first}, Joe from the on-call team. I've got your message about <b>${esc(S.handoverReason.replace("URGENT: ", ""))}</b>. I'm on it. What can you see?`
+      : `Hi ${OWNER.first}, Hannah here. I can see you were asking about <b>${esc(S.handoverReason)}</b>. How can I help?`);
+    chips([["End chat with " + who.name, "endAgent"]]);
+  },
+  endAgent() {
+    if (!S.agent) return A.menu();
+    const who = AGENTS[S.agent];
+    S.script = null; S.agentChips = null;
+    sayAs(who.id, `Thanks ${OWNER.first}. I'll hand you back to the Owner Helper. Message any time if you need me again.`);
+    post(() => { S.agent = null; S.urgent = false; setHeader(); renderConsole(); return `<div class="sys-pill">${who.name} left the chat</div>`; });
+    say("I'm back. Anything else?"); chips(MENU);
+  },
+  agentStep(script, step) { agentStep(script, step); },
+  agentClose(msg) {
+    if (!S.agent) return;
+    const who = AGENTS[S.agent];
+    S.script = null; S.agentChips = null;
+    document.querySelectorAll("#chat .chips").forEach((c) => c.remove());
+    sayAs(who.id, esc(msg));
+    post(() => { S.agent = null; S.urgent = false; setHeader(); renderConsole(); return `<div class="sys-pill">${who.name} ended the chat</div>`; });
+    say("Need anything else? Tap <b>☰</b> below or just type.");
+  },
+  startOver() {
+    say("Start a fresh chat? This clears everything from this conversation, including blocked dates, price changes and issues you reported.");
+    chips([["Yes, start over", "startOverConfirm", [], "urgent"], ["No, carry on", "menu"]]);
+  },
+  startOverConfirm() { post(() => { location.reload(); }); },
+};
+
+/* =====================================================================
+   Routing: taps
+   ===================================================================== */
+const INTENT_LABEL = {
+  welcome: "Start", menu: "Menu", earnings: "Earnings & payouts", statement: "Statement", pdf: "Download statement", query: "Query a charge",
+  bookings: "Bookings", calendar: "Calendar", block: "Block dates", blockReview: "Block dates", blockConfirm: "Block dates: confirmed", unblock: "Unblock dates",
+  performance: "Performance", tips: "Pricing tips", tipWhy: "Why this tip", tipSkip: "Tip skipped", tipReview: "Apply tip", tipConfirm: "Tip applied", undo: "Undo",
+  issues: "Track issues", report: "Report issue", reportType: "Report issue", reportWhat: "Report issue", reportPhoto: "Report issue", reportSummary: "Report issue", reportSend: "Issue logged",
+  damage: "Damage after a stay", urgent: "URGENT", human: "Talk to a person", endAgent: "End agent chat", agentStep: "Reply to agent", startOver: "Start over", startOverConfirm: "Start over: confirmed",
+};
+function lastTopic() {
+  const t = [...S.log].reverse().find((l) => l.intent && !["Menu", "Talk to a person", "Not understood", "Start"].includes(l.intent));
+  return t ? t.intent : null;
+}
+function logEvent(text, intent, how, extra = "") { S.log.push({ who: OWNER.first, text, intent, how, extra, time: clock() }); renderConsole(); }
+function run(act, args = [], label, how = "tap", matched = "") {
+  if (!A[act]) return;
+  S.misses = 0;
+  if (label !== null) logEvent(label, INTENT_LABEL[act] || act, how, matched);
+  A[act](...args);
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
+  const args = b.dataset.args ? JSON.parse(b.dataset.args) : [];
+  const label = b.dataset.echo ?? b.textContent.trim();
+  const chipRow = b.closest(".chips"); if (chipRow) chipRow.remove();
+  userSay(label);
+  run(b.dataset.act, args, label);
+});
+
+/* =====================================================================
+   Routing: typed messages
+   ===================================================================== */
+const RULES = [
+  ["urgent", /\b(leak(ing)?|flood(ing|ed)?|fire|smoke|gas|no (heating|hot water|power|electric(ity)?)|heating (is )?(off|broken|not working)|power cut|burst|emergency|urgent|broken into|break-?in|burgl)/i],
+  ["human", /\b(human|real person|a person|someone|agent|speak to|talk to|call me|hannah|account manager|manager)\b/i],
+  ["undo", /^\s*(undo|reverse|change it back|put it back)\b/i],
+  ["unblock", /\b(unblock|release|free up)\b/i],
+  ["query", /\b(charge|charged|deduct(ion|ed)?|kettle|why (was|did|is)|query|wrong amount|overcharg)/i],
+  ["damage", /\b(damage[ds]?|broke[n]? by (a )?guest|guest broke|stain(ed)?|scratch(ed)?)\b/i],
+  ["issues", /(ISSUE-?\d+)|\b(track|status|update)\b.*\b(issue|repair|fix|job)s?\b|\b(dishwasher)\b|my issues/i],
+  ["report", /\b(report|broken|repair|fix|not working|fault|issue|problem|cleaning|dirty|linen|towels?|boiler|appliance|plumbing)\b/i],
+  ["block", /\b(block|own use|my own|stay there myself|use it myself|for myself|personal use|family stay|keep (some )?(dates|nights))\b/i],
+  ["tips", /\b(tips?|suggest(ion)?s?|advice|more bookings|get more|improve|boost)\b/i],
+  ["performance", /\b(how am i doing|how('s| is) .* doing|performance|occupancy|compare|similar homes|price|pricing|rates?|reviews?|rating)\b/i],
+  ["statement", /\b(statement|breakdown|commission|invoice|pdf)\b/i],
+  ["earnings", /\b(earn(ings|ed)?|payout|paid|pay me|money|income|revenue|how much|when (am|do) i get)\b/i],
+  ["calendar", /\b(calendar|availability|free dates|booked nights)\b/i],
+  ["bookings", /\b(bookings?|guests?|arriv(als?|ing)|who('s| is) (staying|coming)|reservations?|SE-?\d{5})\b/i],
+  ["greet", /^\s*(hi|hello|hey|hiya|good (morning|afternoon|evening))\b/i],
+  ["thanks", /\b(thanks|thank you|cheers|ta|great|perfect)\b/i],
+  ["menu", /^\s*(menu|help|options|start|home|back)\s*$/i],
+];
+const END_RX = /^\s*(end( the)? chat|end|close( the)? chat|back to (the )?(bot|helper)|(ok(ay)?,? )?(thanks?( you)?,? )?(bye|goodbye)|that'?s all( thanks?)?|done|all done)\s*[.!]*\s*$/i;
+const RESET_RX = /^\s*(start over|start again|restart|reset|new chat|clear( chat)?|fresh start)\s*[.!]?\s*$/i;
+const PROP_RX = { rose: /\brose\b/i, willow: /\bwillow\b/i };
+const findProp = (t) => Object.keys(PROP_RX).find((k) => PROP_RX[k].test(t)) || (/\bboth\b/i.test(t) ? "both" : null);
+
+function issueHint(t) {
+  if (/boiler|heating|radiator|hot water/i.test(t)) return { type: "repair", what: "Boiler or heating" };
+  if (/dishwasher|oven|fridge|freezer|washing machine|dryer|kettle|microwave|appliance|tv|hob/i.test(t)) return { type: "repair", what: "Appliance" };
+  if (/toilet|tap|shower|sink|drain|plumbing|pipe/i.test(t)) return { type: "repair", what: "Plumbing" };
+  if (/linen|towel|sheet/i.test(t)) return { type: "clean", what: "Linen or towels" };
+  if (/dirty|clean|dust|stain/i.test(t)) return { type: "clean", what: "Not cleaned to standard" };
+  return null;
+}
+function handleTyped(text) {
+  userSay(text);
+  const t = text.trim();
+  if (RESET_RX.test(t)) return run("startOver", [], t, "typed", t);
+  if (S.agent && END_RX.test(t)) return run("endAgent", [], t, "typed", t);
+  if (S.agent) {
+    logEvent(t, "To agent", "typed");
+    const who = AGENTS[S.agent];
+    if (S.agentChips) { sayAs(who.id, "Thanks. To help me sort this quickly, which of these is closest?"); return chips(S.agentChips); }
+    sayAs(who.id, "Thanks, I'm looking into that now. One moment.");
+    if (!S.agentAutoNoteShown) { S.agentAutoNoteShown = true; sys("Demo: switch on Agent view to reply as " + who.name); }
+    return;
+  }
+  if (S.awaiting?.type === "issueText" && !/gas|fire|smoke|leak|flood|burst|break-?in|burgl/i.test(t)) { logEvent(t, "Report issue", "typed", "description"); return A.reportSummary(t); }
+  const urgentHit = t.match(RULES[0][1]);
+  if (urgentHit) { const p = findProp(t); if (p && p !== "both") S.focusProp = p; return run("urgent", [urgentHit[0].toLowerCase()], t, "typed", urgentHit[0]); }
+
+  const aw = S.awaiting;
+  if (aw?.type === "property") { const p = findProp(t); if (p) return run(aw.next, [p], t, "typed", p); }
+  if (aw?.type === "issueText") { logEvent(t, "Report issue", "typed", "description"); return A.reportSummary(t); }
+
+  const prop = findProp(t);
+  for (const [intent, rx] of RULES.slice(1)) {
+    const m = t.match(rx); if (!m) continue;
+    const word = m[0];
+    switch (intent) {
+      case "greet": S.misses = 0; logEvent(t, "Greeting", "typed", word); say(`Hi ${OWNER.first}! What can I help with?`); return chips(MENU);
+      case "thanks": S.misses = 0; logEvent(t, "Thanks", "typed", word); say("You're welcome! 😊 Anything else?"); return chips([["Main menu", "menu"]]);
+      case "human": return run("human", [lastTopic() || "General question"], t, "typed", word);
+      case "query": return run("human", ["Query about a charge on the January statement"], t, "typed", word);
+      case "damage": return run("damage", [], t, "typed", word);
+      case "report": return run("report", [prop, issueHint(t)], t, "typed", word);
+      case "tips": return run(prop && prop !== "both" ? "tips" : "performance", [prop && prop !== "both" ? prop : (prop || null)], t, "typed", word);
+      case "bookings": case "calendar": case "block": case "performance": return run(intent, [prop], t, "typed", word);
+      default: return run(intent, [], t, "typed", word);
+    }
+  }
+  if (prop && prop !== "both") { S.misses = 0; logEvent(t, "Property", "typed", prop); return run("performance", [prop], null); }
+
+  S.misses++;
+  logEvent(t, "Not understood", "typed");
+  if (S.misses >= 2) {
+    say("Sorry, I've misunderstood you twice now. Rather than keep guessing, would you like me to bring in Hannah, your account manager?");
+    chips([["Yes, get Hannah", "human", ["bot couldn't understand"], "person"], ["No, show me the menu", "menu"]]);
+  } else {
+    say("Sorry, I didn't quite catch that. You can tap an option or try words like “payout”, “block dates” or “dishwasher”.");
+    chips(MENU);
+  }
+}
+$("#composer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const v = $("#msg").value.trim(); if (!v) return;
+  $("#msg").value = ""; handleTyped(v);
+});
+
+/* =====================================================================
+   Header + Agent view
+   ===================================================================== */
+function setHeader() {
+  const head = $("#chatHead");
+  if (S.agent) {
+    const a = AGENTS[S.agent];
+    head.classList.add("with-agent");
+    $("#headAvatar").textContent = a.initials; $("#headAvatar").style.color = "var(--agent)";
+    $("#headName").textContent = `${a.name} · StayEasy`; $("#headStatus").textContent = a.role;
+    $("#msg").placeholder = `Message ${a.name}… (type "end chat" to finish)`;
+    $("#agentbarText").textContent = `You're chatting with ${a.name}, a real person`; $("#agentbar").hidden = false;
+  } else {
+    $("#agentbar").hidden = true; head.classList.remove("with-agent");
+    $("#headAvatar").textContent = "SE"; $("#headAvatar").style.color = "";
+    $("#headName").textContent = "StayEasy Owner Helper"; $("#headStatus").textContent = "Online · team here 8am–8pm";
+    $("#msg").placeholder = "Type a message…";
+  }
+}
+const consoleEl = $("#console");
+$("#agentToggle").addEventListener("click", (e) => {
+  const on = e.currentTarget.getAttribute("aria-pressed") !== "true";
+  e.currentTarget.setAttribute("aria-pressed", on); consoleEl.hidden = !on; renderConsole();
+});
+
+function suggestedReplies() {
+  const out = [], reason = S.handoverReason || "";
+  if (S.urgent) out.push({ text: "I'm calling you now on the number on your account." }, { text: "I've sent our local engineer. They'll be there within the hour, and I'll let the next guests know." });
+  if (/charge|statement/i.test(reason)) {
+    const k = STATEMENT.homes.rose.repairs.find((x) => x.id === "kettle");
+    out.push({ tag: "Explain", text: "The £28 was a replacement kettle at Rose Cottage. The guest reported it broken on 16 Jan and our housekeeper replaced it the same day. I can send you the receipt." });
+    if (!k.waived) out.push({ tag: "Refund £28", act: "refundKettle", text: "I've removed the £28 kettle charge from your January statement as a goodwill gesture." });
+    if (OWNER.repairLimit > 25) out.push({ tag: "Ask first in future", act: "limit25", text: "I've changed your settings so we'll ask you before any repair over £25, except emergencies with guests staying." });
+  }
+  if (/damage/i.test(reason)) out.push({ tag: "Open claim", text: "I've opened CLAIM-112. Please send photos and any repair quote, and I'll match it to the stay using our post-stay photos." });
+  if (!S.urgent && !/charge|damage/i.test(reason)) out.push({ text: "Would a quick call help? I can ring you at a time that suits you today." });
+  out.push({ text: "Is there anything else I can help with today?" });
+  const seen = new Set(); return out.filter((r) => !seen.has(r.text) && seen.add(r.text));
+}
+const REPLY_ACTIONS = {
+  refundKettle() { STATEMENT.homes.rose.repairs.find((x) => x.id === "kettle").waived = AGENTS[S.agent].name; post(() => rowHTML("agent", "", { wide: true }).replace("</div></div>", statementCard() + "</div></div>")); },
+  limit25() { OWNER.repairLimit = 25; },
+};
+
+function renderConsole() {
+  if (consoleEl.hidden) return;
+  const misses = S.log.filter((l) => l.intent === "Not understood").length;
+  const intents = [...new Set(S.log.map((l) => l.intent).filter((i) => i && !["Menu", "Start", "Greeting", "Thanks", "To agent"].includes(i)))];
+  const flags = [
+    S.urgent ? `<span class="flag red">URGENT</span>` : "",
+    S.agent ? `<span class="flag blue">With ${AGENTS[S.agent].name}</span>` : `<span class="flag green">Bot handling</span>`,
+    misses ? `<span class="flag amber">${misses} not understood</span>` : "",
+    `<span class="flag amber">${Object.keys(ISSUES).length} open issue${Object.keys(ISSUES).length === 1 ? "" : "s"}</span>`,
+    occ60("rose") < PROPS.rose.perf.occPeers ? `<span class="flag amber">Rose Cottage below similar homes</span>` : "",
+    `<span class="flag blue">Owner since ${OWNER.since}</span>`,
+  ].join("");
+  const summary = S.handoverReason
+    ? `${OWNER.first} was handed over for <b>${esc(S.handoverReason)}</b>. Before that the bot covered: ${intents.length ? intents.map(esc).join(" → ") : "nothing yet"}.`
+    : `No handover yet. The bot is handling this chat. Topics so far: ${intents.length ? intents.map(esc).join(" → ") : "none yet"}.`;
+  const tl = S.log.slice(-14).map((l) => `<li><span class="t">${l.time} · ${esc(l.who)}${l.how ? ` · ${l.how}` : ""}</span>${l.intent ? `<span class="intent ${l.intent === "Not understood" ? "miss" : ""}">${esc(l.intent)}</span>` : ""}${l.extra ? `<span class="t"> matched “${esc(l.extra)}”</span>` : ""}<br>${esc(l.text)}</li>`).join("");
+  const changes = [...S.applied.map((id) => { const p = Object.keys(TIPS).find((k) => TIPS[k].some((t) => t.id === id)); return `${PROPS[p].name}: ${findTip(p, id).action}`; }),
+    ...BLOCKS.map((b) => `${PROPS[b.prop].name}: blocked ${fmt(b.start)} → ${fmt(b.end)}`)];
+  consoleEl.innerHTML = `
+    <h2>Agent view · what ${S.agent ? AGENTS[S.agent].name : "the owner team"} sees</h2>
+    <div class="panel">${flags}<p style="margin:6px 0 0">${summary}</p></div>
+    <h2>Owner</h2>
+    <div class="panel kv"><span>Name</span><span>${OWNER.first} ${OWNER.last}</span><span>Contact</span><span>${OWNER.phone} · ${OWNER.email}</span>
+      <span>Homes</span><span>${Object.values(PROPS).map((p) => p.name).join(" · ")}</span><span>Next payout</span><span>${money(statementTotal())} on ${fmt(STATEMENT.payDate)}</span>
+      <span>Repair limit</span><span>Ask before repairs over ${money(OWNER.repairLimit)}</span><span>Changes today</span><span>${changes.length ? changes.map(esc).join("<br>") : "None"}</span></div>
+    <h2>Suggested replies</h2>
+    <div class="panel">${S.agent
+      ? suggestedReplies().map((r, i) => `<button class="reply-btn" data-reply-i="${i}">${r.tag ? `<b class="reply-tag${r.act ? " act" : ""}">${esc(r.tag)}${r.act ? " · does it" : ""}</b>` : ""}↩ ${esc(r.text)}</button>`).join("")
+      : `<p style="margin:0">Replies unlock when a person joins the chat.</p><button class="take-over" data-takeover>Take over this chat as Hannah</button>`}</div>
+    ${S.agent ? `<h2>End chat</h2>
+    <div class="panel">
+      <label for="closingMsg" style="display:block;margin-bottom:4px;color:var(--muted)">Closing message (you can edit it)</label>
+      <textarea id="closingMsg" rows="4" style="width:100%;font:inherit;padding:8px;border:1px solid #CDD6E4;border-radius:8px;resize:vertical">${esc(closingMessage())}</textarea>
+      <button class="take-over" data-agent-end style="background:var(--red)">Send and end chat</button>
+    </div>` : ""}
+    <h2>Transcript with detected intents</h2>
+    <div class="panel"><ul class="tl">${tl || "<li>Nothing yet.</li>"}</ul></div>`;
+}
+consoleEl.addEventListener("click", (e) => {
+  const r = e.target.closest("[data-reply-i]");
+  if (r && S.agent) {
+    const reply = suggestedReplies()[Number(r.dataset.replyI)];
+    $("#agentToggle").click();
+    document.querySelectorAll("#chat .chips").forEach((c) => c.remove());
+    sayAs(S.agent, esc(reply.text));
+    if (reply.act) REPLY_ACTIONS[reply.act]();
+    return;
+  }
+  if (e.target.closest("[data-agent-end]") && S.agent) { const msg = ($("#closingMsg").value || "").trim() || closingMessage(); $("#agentToggle").click(); A.agentClose(msg); return; }
+  if (e.target.closest("[data-takeover]")) { $("#agentToggle").click(); run("human", ["agent took over"], null); }
+});
+$("#restart").addEventListener("click", () => { if (S.log.length === 0) return location.reload(); userSay("Start over"); run("startOver", [], "Start over (↺ button)"); });
+
+/* =====================================================================
+   Notes panel + footer
+   ===================================================================== */
+$("#designer").textContent = CONFIG.designerName;
+$("#linkedin").href = CONFIG.linkedinUrl;
+$("#evidence").innerHTML = CONFIG.evidence.map((x) => `<li>${x.label ? `<b class="ev-label">${esc(x.label)}</b>` : ""}${esc(x.text)}</li>`).join("");
+const TRIES = ["when am I paid?", "why was I charged £28?", "block dates at willow", "how is rose cottage doing?", "dishwasher update", "the boiler is broken", "a guest damaged the sofa", "there's a leak at rose", "talk to hannah", "start over"];
+$("#tries").innerHTML = TRIES.map((t) => `<button class="try">${esc(t)}</button>`).join("");
+$("#tries").addEventListener("click", (e) => { const b = e.target.closest(".try"); if (b) { handleTyped(b.textContent); $("#msg").focus(); } });
+
+A.welcome();
+</script>
+<!-- Anonymous visit counter (GoatCounter: no cookies, no personal data) -->
+<script data-goatcounter="https://snehal.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+</body>
+</html>
